@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import { geocodingService, GeocodingError } from './services/geocodingService.js';
 
 dotenv.config();
 
@@ -99,32 +100,64 @@ app.post('/api/route', (req, res) => {
 });
 
 // Geocoding endpoint
-app.get('/api/geocode', (req, res) => {
+app.get('/api/geocode', async (req, res) => {
   try {
     const { location } = req.query;
+    const requestId = req.headers['x-request-id'] as string;
     
     if (!location || typeof location !== 'string') {
       return res.status(400).json({
         error: {
           code: 'MISSING_LOCATION_PARAMETER',
           message: 'Location parameter is required',
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          requestId,
+          suggestions: [
+            'Provide a location parameter: /api/geocode?location=New York',
+            'Location can be an address, city name, or coordinates'
+          ]
         }
       });
     }
 
-    // Placeholder response - actual implementation will be in later tasks
-    res.json({ 
-      message: 'Geocoding endpoint - to be implemented',
-      requestData: { location },
-      timestamp: new Date().toISOString()
+    // Use the geocoding service
+    const result = await geocodingService.geocodeLocation(location);
+    
+    res.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString(),
+      requestId
     });
   } catch (error) {
+    const requestId = req.headers['x-request-id'] as string;
+    
+    // Handle geocoding-specific errors
+    if (error && typeof error === 'object' && 'code' in error) {
+      const geocodingError = error as GeocodingError;
+      const statusCode = geocodingError.code === 'INVALID_LOCATION_INPUT' ? 400 : 
+                        geocodingError.code === 'LOCATION_NOT_FOUND' ? 404 :
+                        geocodingError.code === 'RATE_LIMIT_EXCEEDED' ? 429 : 500;
+      
+      return res.status(statusCode).json({
+        error: {
+          code: geocodingError.code,
+          message: geocodingError.message,
+          suggestions: geocodingError.suggestions,
+          timestamp: new Date().toISOString(),
+          requestId
+        }
+      });
+    }
+    
+    // Handle unexpected errors
+    console.error('Geocoding endpoint error:', error);
     res.status(500).json({
       error: {
         code: 'GEOCODING_ERROR',
         message: 'Failed to process geocoding request',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        requestId
       }
     });
   }
@@ -212,9 +245,35 @@ const server = app.listen(PORT, () => {
   console.log(`   GET  /api/geocode  - Location geocoding`);
 });
 
+// Set up periodic cache cleanup (every hour)
+const cacheCleanupInterval = setInterval(() => {
+  geocodingService.clearExpiredCache();
+}, 60 * 60 * 1000);
+
+// Add cache stats to health check
+app.get('/api/health/cache', (req, res) => {
+  try {
+    const cacheStats = geocodingService.getCacheStats();
+    res.json({
+      status: 'ok',
+      cache: cacheStats,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: {
+        code: 'CACHE_STATS_ERROR',
+        message: 'Failed to retrieve cache statistics',
+        timestamp: new Date().toISOString()
+      }
+    });
+  }
+});
+
 // Graceful shutdown handling
 process.on('SIGTERM', () => {
   console.log('🛑 SIGTERM received, shutting down gracefully...');
+  clearInterval(cacheCleanupInterval);
   server.close(() => {
     console.log('✅ Server closed successfully');
     process.exit(0);
@@ -223,6 +282,7 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
   console.log('🛑 SIGINT received, shutting down gracefully...');
+  clearInterval(cacheCleanupInterval);
   server.close(() => {
     console.log('✅ Server closed successfully');
     process.exit(0);

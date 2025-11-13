@@ -19,14 +19,14 @@
   - Implement error response formatting according to design specifications
   - _Requirements: 1.4, 7.3_
 
-- [ ] 3. Create backend API foundation
+- [x] 3. Create backend API foundation
 - [x] 3.1 Set up Express.js server with basic routing
   - Initialize Express application with middleware setup
   - Create basic route handlers for /api/route, /api/geocode, /api/health
   - Implement request logging and error handling middleware
   - _Requirements: 7.1, 7.2, 7.4_
 
-- [ ] 3.2 Implement geocoding service integration
+- [x] 3.2 Implement geocoding service integration
   - Create geocoding service class with external API integration
   - Write functions to validate and convert location strings to coordinates
   - Implement caching mechanism for geocoding results
