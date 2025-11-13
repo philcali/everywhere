@@ -53,7 +53,7 @@ interface RouteResponse {
 
 /**
  * POST /api/route/calculate
- * Calculate route between two locations for land travel modes
+ * Calculate route between two locations for all travel modes
  */
 router.post('/calculate', async (req: Request, res: Response) => {
     try {
@@ -77,13 +77,13 @@ router.post('/calculate', async (req: Request, res: Response) => {
             ));
         }
 
-        // Validate travel mode for land routes
-        if (![TravelMode.DRIVING, TravelMode.WALKING, TravelMode.CYCLING].includes(travelMode)) {
+        // Validate travel mode for all supported modes
+        if (!Object.values(TravelMode).includes(travelMode)) {
             return res.status(400).json(createErrorResponse(
                 ErrorCode.INVALID_TRAVEL_CONFIG,
-                `Travel mode ${travelMode} is not supported for land routes`,
-                { travelMode },
-                ['Use driving, walking, or cycling mode']
+                `Travel mode ${travelMode} is not supported`,
+                { travelMode, supportedModes: Object.values(TravelMode) },
+                ['Use one of: driving, walking, cycling, flying, sailing, cruise']
             ));
         }
 
@@ -119,13 +119,35 @@ router.post('/calculate', async (req: Request, res: Response) => {
             ));
         }
 
-        if (customSpeed && (customSpeed <= 0 || customSpeed > 1000)) {
+        if (customSpeed && (customSpeed <= 0 || customSpeed > 2000)) {
             return res.status(400).json(createErrorResponse(
                 ErrorCode.OUT_OF_RANGE,
-                'Custom speed must be between 0 and 1000 km/h',
-                { customSpeed, validRange: '0 to 1000 km/h' },
+                'Custom speed must be between 0 and 2000 km/h',
+                { customSpeed, validRange: '0 to 2000 km/h' },
                 ['Provide a realistic speed for the selected travel mode']
             ));
+        }
+
+        // Validate speed ranges for specific travel modes
+        if (customSpeed) {
+            const speedLimits = {
+                [TravelMode.WALKING]: { min: 1, max: 15 },
+                [TravelMode.CYCLING]: { min: 5, max: 80 },
+                [TravelMode.DRIVING]: { min: 10, max: 200 },
+                [TravelMode.FLYING]: { min: 200, max: 2000 },
+                [TravelMode.SAILING]: { min: 5, max: 50 },
+                [TravelMode.CRUISE]: { min: 10, max: 60 }
+            };
+
+            const limits = speedLimits[travelMode];
+            if (limits && (customSpeed < limits.min || customSpeed > limits.max)) {
+                return res.status(400).json(createErrorResponse(
+                    ErrorCode.OUT_OF_RANGE,
+                    `Custom speed for ${travelMode} must be between ${limits.min} and ${limits.max} km/h`,
+                    { customSpeed, travelMode, validRange: `${limits.min} to ${limits.max} km/h` },
+                    [`Typical ${travelMode} speeds range from ${limits.min} to ${limits.max} km/h`]
+                ));
+            }
         }
 
         // Geocode locations
@@ -182,8 +204,8 @@ router.post('/calculate', async (req: Request, res: Response) => {
             }
         };
 
-        // Calculate route
-        const routingResult = await routingService.calculateLandRoute(
+        // Calculate route using the appropriate method based on travel mode
+        const routingResult = await routingService.calculateRoute(
             sourceLocation,
             destinationLocation,
             travelConfig

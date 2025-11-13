@@ -10,6 +10,7 @@ vi.mock('../services/routingService.js', async () => {
     return {
         ...actual,
         routingService: {
+            calculateRoute: vi.fn(),
             calculateLandRoute: vi.fn(),
             getCacheStats: vi.fn(() => ({ size: 5, maxSize: 500 })),
             clearExpiredCache: vi.fn()
@@ -104,7 +105,7 @@ describe('Routing Routes', () => {
                     confidence: 0.9
                 });
 
-            vi.mocked(routingService.calculateLandRoute)
+            vi.mocked(routingService.calculateRoute)
                 .mockResolvedValueOnce(mockRoutingResult);
 
             const response = await request(app)
@@ -127,12 +128,35 @@ describe('Routing Routes', () => {
             expect(response.body.error.code).toBe('MISSING_REQUIRED_FIELD');
         });
 
+        it('should accept all valid travel modes', async () => {
+            vi.mocked(geocodingService.geocodeLocation)
+                .mockResolvedValue(mockGeocodingResult);
+
+            const flyingResult = {
+                ...mockRoutingResult,
+                route: { ...mockRoutingResult.route, travelMode: TravelMode.FLYING }
+            };
+
+            vi.mocked(routingService.calculateRoute)
+                .mockResolvedValueOnce(flyingResult);
+
+            const response = await request(app)
+                .post('/api/route/calculate')
+                .send({
+                    ...validRequest,
+                    travelMode: TravelMode.FLYING
+                })
+                .expect(200);
+
+            expect(response.body.route.travelMode).toBe(TravelMode.FLYING);
+        });
+
         it('should reject invalid travel modes', async () => {
             const response = await request(app)
                 .post('/api/route/calculate')
                 .send({
                     ...validRequest,
-                    travelMode: TravelMode.FLYING // Not supported for land routes
+                    travelMode: 'invalid_mode' as TravelMode
                 })
                 .expect(400);
 
@@ -169,11 +193,37 @@ describe('Routing Routes', () => {
                 .post('/api/route/calculate')
                 .send({
                     ...validRequest,
-                    customSpeed: 1500 // Too fast
+                    customSpeed: 3000 // Too fast even for flying
                 })
                 .expect(400);
 
             expect(response.body.error.code).toBe('OUT_OF_RANGE');
+        });
+
+        it('should validate speed ranges for specific travel modes', async () => {
+            // Test walking with too high speed
+            const walkingResponse = await request(app)
+                .post('/api/route/calculate')
+                .send({
+                    ...validRequest,
+                    travelMode: TravelMode.WALKING,
+                    customSpeed: 100 // Too fast for walking
+                })
+                .expect(400);
+
+            expect(walkingResponse.body.error.code).toBe('OUT_OF_RANGE');
+
+            // Test flying with too low speed
+            const flyingResponse = await request(app)
+                .post('/api/route/calculate')
+                .send({
+                    ...validRequest,
+                    travelMode: TravelMode.FLYING,
+                    customSpeed: 50 // Too slow for flying
+                })
+                .expect(400);
+
+            expect(flyingResponse.body.error.code).toBe('OUT_OF_RANGE');
         });
 
         it('should handle low confidence geocoding results', async () => {
@@ -227,7 +277,7 @@ describe('Routing Routes', () => {
 
             const routingError = new RoutingError('NO_ROUTE_FOUND', 'No route found', ['Try a different travel mode']);
 
-            vi.mocked(routingService.calculateLandRoute)
+            vi.mocked(routingService.calculateRoute)
                 .mockRejectedValueOnce(routingError);
 
             const response = await request(app)
@@ -250,7 +300,7 @@ describe('Routing Routes', () => {
                     confidence: 0.9
                 });
 
-            vi.mocked(routingService.calculateLandRoute)
+            vi.mocked(routingService.calculateRoute)
                 .mockResolvedValueOnce(mockRoutingResult);
 
             const response = await request(app)
@@ -262,7 +312,7 @@ describe('Routing Routes', () => {
                 })
                 .expect(200);
 
-            expect(vi.mocked(routingService.calculateLandRoute)).toHaveBeenCalledWith(
+            expect(vi.mocked(routingService.calculateRoute)).toHaveBeenCalledWith(
                 expect.any(Object),
                 expect.any(Object),
                 expect.objectContaining({
@@ -272,6 +322,54 @@ describe('Routing Routes', () => {
                     })
                 })
             );
+        });
+
+        it('should handle air travel modes', async () => {
+            vi.mocked(geocodingService.geocodeLocation)
+                .mockResolvedValue(mockGeocodingResult);
+
+            const flyingResult = {
+                ...mockRoutingResult,
+                route: { ...mockRoutingResult.route, travelMode: TravelMode.FLYING }
+            };
+
+            vi.mocked(routingService.calculateRoute)
+                .mockResolvedValueOnce(flyingResult);
+
+            const response = await request(app)
+                .post('/api/route/calculate')
+                .send({
+                    ...validRequest,
+                    travelMode: TravelMode.FLYING,
+                    customSpeed: 800
+                })
+                .expect(200);
+
+            expect(response.body.route.travelMode).toBe(TravelMode.FLYING);
+        });
+
+        it('should handle sea travel modes', async () => {
+            vi.mocked(geocodingService.geocodeLocation)
+                .mockResolvedValue(mockGeocodingResult);
+
+            const sailingResult = {
+                ...mockRoutingResult,
+                route: { ...mockRoutingResult.route, travelMode: TravelMode.SAILING }
+            };
+
+            vi.mocked(routingService.calculateRoute)
+                .mockResolvedValueOnce(sailingResult);
+
+            const response = await request(app)
+                .post('/api/route/calculate')
+                .send({
+                    ...validRequest,
+                    travelMode: TravelMode.SAILING,
+                    customSpeed: 20
+                })
+                .expect(200);
+
+            expect(response.body.route.travelMode).toBe(TravelMode.SAILING);
         });
     });
 

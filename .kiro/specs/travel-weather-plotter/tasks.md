@@ -55,7 +55,7 @@
   - Create route optimization logic based on travel mode
   - _Requirements: 1.3, 5.1, 5.2, 5.3, 5.7_
 
-- [ ] 4.2 Extend routing service for air and sea travel modes
+- [x] 4.2 Extend routing service for air and sea travel modes
   - Implement direct flight path calculations for flying mode
   - Add maritime routing logic for sailing and cruise modes
   - Create travel speed calculations for different modes
