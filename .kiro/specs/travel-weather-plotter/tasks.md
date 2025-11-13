@@ -20,7 +20,7 @@
   - _Requirements: 1.4, 7.3_
 
 - [ ] 3. Create backend API foundation
-- [ ] 3.1 Set up Express.js server with basic routing
+- [x] 3.1 Set up Express.js server with basic routing
   - Initialize Express application with middleware setup
   - Create basic route handlers for /api/route, /api/geocode, /api/health
   - Implement request logging and error handling middleware
