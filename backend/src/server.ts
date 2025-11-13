@@ -4,12 +4,14 @@ import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { geocodingService, GeocodingError } from './services/geocodingService.js';
 import { routingService } from './services/routingService.js';
+import { weatherService } from './services/weatherService.js';
 import { database } from './database/connection.js';
 import { runMigrations, seedDatabase } from './database/migrations.js';
 import { JWTService } from './auth/jwt.js';
 import { AuthService } from './services/authService.js';
 import authRoutes from './routes/auth.js';
 import routingRoutes from './routes/routing.js';
+import weatherRoutes from './routes/weather.js';
 
 dotenv.config();
 
@@ -56,6 +58,9 @@ app.use('/api/auth', authRoutes);
 
 // Routing routes
 app.use('/api/route', routingRoutes);
+
+// Weather routes
+app.use('/api/weather', weatherRoutes);
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
@@ -227,6 +232,10 @@ app.use('*', (req, res) => {
         'GET /api/route/health',
         'POST /api/route/clear-cache',
         'GET /api/geocode',
+        'GET /api/weather/current',
+        'GET /api/weather/forecast',
+        'POST /api/weather/route',
+        'GET /api/weather/health',
         'POST /api/auth/register',
         'POST /api/auth/login',
         'POST /api/auth/refresh',
@@ -267,6 +276,10 @@ async function startServer() {
       console.log(`   GET  /api/route/health        - Route service health`);
       console.log(`   POST /api/route/clear-cache   - Clear route cache`);
       console.log(`   GET  /api/geocode             - Location geocoding`);
+      console.log(`   GET  /api/weather/current     - Current weather`);
+      console.log(`   GET  /api/weather/forecast    - Weather forecast`);
+      console.log(`   POST /api/weather/route       - Route weather data`);
+      console.log(`   GET  /api/weather/health      - Weather service health`);
       console.log(`   POST /api/auth/register       - User registration`);
       console.log(`   POST /api/auth/login          - User login`);
       console.log(`   POST /api/auth/refresh        - Refresh tokens`);
@@ -294,6 +307,9 @@ const cleanupInterval = setInterval(async () => {
     
     // Clear expired routing cache
     routingService.clearExpiredCache();
+    
+    // Clear expired weather cache
+    weatherService.clearExpiredCache();
     
     // Clean up expired refresh tokens
     const expiredTokens = await JWTService.cleanupExpiredTokens();
