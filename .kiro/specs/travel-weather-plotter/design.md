@@ -2,9 +2,9 @@
 
 ## Overview
 
-The Travel Weather Plotter is a web-based application that combines route planning with weather forecasting to provide travelers with comprehensive weather insights along their journey. The system integrates with external APIs for geocoding, routing, and weather data to create an interactive visualization of weather conditions over time and distance.
+The Travel Weather Plotter is a web-based application that combines route planning with weather forecasting to provide travelers with comprehensive weather insights along their journey. The system integrates with external APIs for geocoding, routing, and weather data to create an interactive visualization of weather conditions over time and distance. Additionally, the application features a personal travel journal that allows authenticated users to save and revisit their travel histories with associated weather data.
 
-The application follows a client-server architecture with a responsive web frontend that works seamlessly across desktop and mobile devices. The backend handles API integrations, data processing, and serves the frontend application.
+The application follows a client-server architecture with a responsive web frontend that works seamlessly across desktop and mobile devices. The backend handles API integrations, data processing, user authentication, and persistent storage of travel journals.
 
 ## Architecture
 
@@ -14,23 +14,31 @@ The application follows a client-server architecture with a responsive web front
 graph TB
     A[User Interface] --> B[Frontend Application]
     B --> C[API Gateway/Backend]
-    C --> D[Geocoding Service]
-    C --> E[Routing Service]
-    C --> F[Weather Service]
-    C --> G[Data Processing Engine]
-    G --> H[Weather Interpolation]
-    G --> I[Route Analysis]
-    B --> J[Visualization Engine]
-    J --> K[Chart Library]
-    J --> L[Map Integration]
+    C --> D[Authentication Service]
+    C --> E[Geocoding Service]
+    C --> F[Routing Service]
+    C --> G[Weather Service]
+    C --> H[Data Processing Engine]
+    C --> I[Travel Journal Service]
+    H --> J[Weather Interpolation]
+    H --> K[Route Analysis]
+    I --> L[Database]
+    D --> L
+    B --> M[Visualization Engine]
+    M --> N[Chart Library]
+    M --> O[Map Integration]
+    B --> P[Journal Interface]
 ```
 
 ### System Components
 
-1. **Frontend Application**: Responsive web application handling user interactions and data visualization
-2. **Backend API**: RESTful API handling external service integration and data processing
+1. **Frontend Application**: Responsive web application handling user interactions, data visualization, and journal management
+2. **Backend API**: RESTful API handling external service integration, data processing, authentication, and data persistence
 3. **External Services**: Third-party APIs for geocoding, routing, and weather data
 4. **Data Processing Engine**: Core logic for route analysis and weather interpolation
+5. **Authentication Service**: User management, session handling, and security
+6. **Travel Journal Service**: Personal journey storage and retrieval system
+7. **Database**: Persistent storage for user accounts and travel history
 
 ## Components and Interfaces
 
@@ -55,6 +63,24 @@ graph TB
   - Touch-friendly interactions
   - Color-coded weather indicators
 
+#### Authentication Component
+- **Purpose**: Handles user registration, login, and session management
+- **Interfaces**:
+  - Registration form with email validation
+  - Login form with secure authentication
+  - User profile management
+  - Session state management
+- **Features**: JWT token handling, password security, optional guest mode
+
+#### Travel Journal Component
+- **Purpose**: Manages saved journeys and travel history
+- **Interfaces**:
+  - Journey save dialog with custom naming
+  - Historical journey list with search and filtering
+  - Journey detail view with full weather replay
+  - Journey comparison and analytics
+- **Features**: Chronological organization, journey metadata, export capabilities
+
 #### Error Handling Component
 - **Purpose**: Manages error states and user feedback
 - **Interfaces**: Toast notifications, inline error messages, loading states
@@ -66,6 +92,13 @@ graph TB
 - **Endpoints**:
   - `POST /api/route` - Calculate route and weather
   - `GET /api/geocode` - Location validation and geocoding
+  - `POST /api/auth/register` - User registration
+  - `POST /api/auth/login` - User authentication
+  - `POST /api/auth/logout` - Session termination
+  - `GET /api/journal` - Retrieve user's travel history
+  - `POST /api/journal` - Save new journey
+  - `GET /api/journal/:id` - Get specific journey details
+  - `DELETE /api/journal/:id` - Delete saved journey
   - `GET /api/health` - System health check
 
 #### Route Service
@@ -81,6 +114,23 @@ graph TB
   - Integration with weather APIs (OpenWeatherMap, WeatherAPI)
   - Multi-point weather data retrieval
   - Weather data normalization and formatting
+
+#### Authentication Service
+- **Purpose**: Handles user management and security
+- **Functions**:
+  - User registration with email verification
+  - Secure password hashing and validation
+  - JWT token generation and validation
+  - Session management and refresh tokens
+  - Password reset functionality
+
+#### Travel Journal Service
+- **Purpose**: Manages persistent storage of user travel data
+- **Functions**:
+  - Journey serialization and storage
+  - Historical data retrieval with filtering
+  - Journey metadata management
+  - Data export and backup capabilities
 
 #### Data Processing Service
 - **Purpose**: Core business logic for combining route and weather data
@@ -193,13 +243,77 @@ enum TravelMode {
 }
 ```
 
+### User and Authentication Models
+```typescript
+interface User {
+  id: string;
+  email: string;
+  passwordHash: string;
+  createdAt: Date;
+  lastLoginAt?: Date;
+  profile: {
+    displayName?: string;
+    preferences: UserPreferences;
+  };
+}
+
+interface UserPreferences {
+  defaultTravelMode: TravelMode;
+  temperatureUnit: 'celsius' | 'fahrenheit';
+  distanceUnit: 'metric' | 'imperial';
+  autoSaveJourneys: boolean;
+}
+
+interface AuthToken {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: Date;
+  userId: string;
+}
+```
+
+### Travel Journal Models
+```typescript
+interface SavedJourney {
+  id: string;
+  userId: string;
+  name: string;
+  description?: string;
+  createdAt: Date;
+  route: Route;
+  weatherData: WeatherForecast[];
+  travelConfig: TravelConfig;
+  metadata: {
+    actualTravelDate?: Date;
+    tags: string[];
+    rating?: number;
+    notes?: string;
+  };
+}
+
+interface JournalQuery {
+  userId: string;
+  dateRange?: {
+    start: Date;
+    end: Date;
+  };
+  travelMode?: TravelMode;
+  tags?: string[];
+  searchTerm?: string;
+  limit?: number;
+  offset?: number;
+}
+```
+
 ## Error Handling
 
 ### Error Categories
 1. **Input Validation Errors**: Invalid locations, unrealistic travel parameters
-2. **External API Errors**: Service unavailability, rate limiting, invalid responses
-3. **Network Errors**: Connectivity issues, timeouts
-4. **Data Processing Errors**: Route calculation failures, weather interpolation issues
+2. **Authentication Errors**: Invalid credentials, expired tokens, unauthorized access
+3. **External API Errors**: Service unavailability, rate limiting, invalid responses
+4. **Network Errors**: Connectivity issues, timeouts
+5. **Data Processing Errors**: Route calculation failures, weather interpolation issues
+6. **Database Errors**: Connection failures, data corruption, storage limits
 
 ### Error Handling Strategy
 - **Graceful Degradation**: Show partial results when some data is unavailable
@@ -263,7 +377,18 @@ interface ErrorResponse {
 - **Parallel Processing**: Concurrent API calls where possible to reduce latency
 
 ### Security Considerations
+- **Authentication Security**: JWT tokens with secure signing, refresh token rotation
+- **Password Security**: Bcrypt hashing with salt, password strength requirements
 - **Input Sanitization**: Validate and sanitize all user inputs
-- **API Security**: Secure API key storage and usage
+- **API Security**: Secure API key storage and usage, rate limiting per user
+- **Data Privacy**: User data encryption at rest, GDPR compliance considerations
 - **HTTPS**: Enforce secure connections for all communications
 - **CORS**: Proper cross-origin resource sharing configuration
+- **Session Management**: Secure session handling, automatic logout on inactivity
+
+### Database Design
+- **User Storage**: Secure user credential storage with proper indexing
+- **Journey Storage**: Efficient storage of route and weather data with compression
+- **Data Retention**: Configurable data retention policies for user privacy
+- **Backup Strategy**: Regular automated backups with point-in-time recovery
+- **Scalability**: Database design to handle growing user base and journey data

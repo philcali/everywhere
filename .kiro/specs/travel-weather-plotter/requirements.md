@@ -82,6 +82,21 @@ The Travel Weather Plotter is an application that allows users to input a source
 
 ### Requirement 7
 
+**User Story:** As a returning user, I want to authenticate and access my travel history, so that I can view and manage my previous journeys in a personal travel journal.
+
+#### Acceptance Criteria
+
+1. WHEN a user creates an account THEN the system SHALL securely store their credentials and create a user profile
+2. WHEN a user logs in THEN the system SHALL authenticate them and provide access to their personal data
+3. WHEN a user completes a travel route query THEN the system SHALL offer to save the journey to their travel journal
+4. WHEN a user saves a journey THEN the system SHALL store the route, weather data, and travel details with a timestamp
+5. WHEN an authenticated user accesses their journal THEN the system SHALL display a chronological list of their saved journeys
+6. WHEN viewing journal entries THEN the system SHALL show route details, weather conditions encountered, and travel dates
+7. WHEN a user selects a previous journey THEN the system SHALL allow them to view the full weather plot and route details
+8. IF a user is not authenticated THEN the system SHALL still allow full functionality but without saving capabilities
+
+### Requirement 8
+
 **User Story:** As a user, I want the application to be responsive and handle errors gracefully, so that I have a smooth experience even when things go wrong.
 
 #### Acceptance Criteria

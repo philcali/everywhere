@@ -3,6 +3,9 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { geocodingService, GeocodingError } from './services/geocodingService.js';
+import { database } from './database/connection.js';
+import { runMigrations, seedDatabase } from './database/migrations.js';
+import { JWTService } from './auth/jwt.js';
 
 dotenv.config();
 
@@ -45,15 +48,30 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
   try {
-    res.json({ 
-      status: 'ok', 
+    // Check database connectivity
+    let dbStatus = 'ok';
+    try {
+      await database.get('SELECT 1');
+    } catch (error) {
+      dbStatus = 'error';
+    }
+
+    const health = {
+      status: dbStatus === 'ok' ? 'ok' : 'degraded',
       timestamp: new Date().toISOString(),
       service: 'travel-weather-plotter-backend',
       version: '1.0.0',
-      uptime: process.uptime()
-    });
+      uptime: process.uptime(),
+      database: {
+        status: dbStatus,
+        type: 'sqlite3'
+      }
+    };
+
+    const statusCode = health.status === 'ok' ? 200 : 503;
+    res.status(statusCode).json(health);
   } catch (error) {
     res.status(500).json({
       error: {
@@ -234,20 +252,56 @@ app.use('*', (req, res) => {
   });
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`🚀 Travel Weather Plotter Backend Server started`);
-  console.log(`📍 Server running on port ${PORT}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`⏰ Started at: ${new Date().toISOString()}`);
-  console.log(`📋 Available endpoints:`);
-  console.log(`   GET  /api/health   - Health check`);
-  console.log(`   POST /api/route    - Route calculation`);
-  console.log(`   GET  /api/geocode  - Location geocoding`);
-});
+// Initialize database and start server
+async function startServer() {
+  try {
+    // Connect to database
+    await database.connect();
+    
+    // Run migrations
+    await runMigrations();
+    
+    // Seed database in development
+    if (process.env.NODE_ENV !== 'production') {
+      await seedDatabase();
+    }
+    
+    // Start server
+    const server = app.listen(PORT, () => {
+      console.log(`🚀 Travel Weather Plotter Backend Server started`);
+      console.log(`📍 Server running on port ${PORT}`);
+      console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`⏰ Started at: ${new Date().toISOString()}`);
+      console.log(`💾 Database: Connected and migrated`);
+      console.log(`📋 Available endpoints:`);
+      console.log(`   GET  /api/health   - Health check`);
+      console.log(`   POST /api/route    - Route calculation`);
+      console.log(`   GET  /api/geocode  - Location geocoding`);
+    });
 
-// Set up periodic cache cleanup (every hour)
-const cacheCleanupInterval = setInterval(() => {
-  geocodingService.clearExpiredCache();
+    return server;
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+const serverPromise = startServer();
+
+// Set up periodic cleanup tasks (every hour)
+const cleanupInterval = setInterval(async () => {
+  try {
+    // Clear expired geocoding cache
+    geocodingService.clearExpiredCache();
+    
+    // Clean up expired refresh tokens
+    const expiredTokens = await JWTService.cleanupExpiredTokens();
+    if (expiredTokens > 0) {
+      console.log(`🧹 Cleaned up ${expiredTokens} expired refresh tokens`);
+    }
+  } catch (error) {
+    console.error('Error during periodic cleanup:', error);
+  }
 }, 60 * 60 * 1000);
 
 // Add cache stats to health check
@@ -271,21 +325,39 @@ app.get('/api/health/cache', (req, res) => {
 });
 
 // Graceful shutdown handling
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
   console.log('🛑 SIGTERM received, shutting down gracefully...');
-  clearInterval(cacheCleanupInterval);
-  server.close(() => {
-    console.log('✅ Server closed successfully');
-    process.exit(0);
+  clearInterval(cleanupInterval);
+  
+  const server = await serverPromise;
+  server.close(async () => {
+    try {
+      await database.close();
+      console.log('✅ Database connection closed');
+      console.log('✅ Server closed successfully');
+      process.exit(0);
+    } catch (error) {
+      console.error('Error during shutdown:', error);
+      process.exit(1);
+    }
   });
 });
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   console.log('🛑 SIGINT received, shutting down gracefully...');
-  clearInterval(cacheCleanupInterval);
-  server.close(() => {
-    console.log('✅ Server closed successfully');
-    process.exit(0);
+  clearInterval(cleanupInterval);
+  
+  const server = await serverPromise;
+  server.close(async () => {
+    try {
+      await database.close();
+      console.log('✅ Database connection closed');
+      console.log('✅ Server closed successfully');
+      process.exit(0);
+    } catch (error) {
+      console.error('Error during shutdown:', error);
+      process.exit(1);
+    }
   });
 });
 
