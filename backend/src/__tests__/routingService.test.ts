@@ -292,7 +292,8 @@ describe('RoutingService', () => {
             const result = await routingService.calculateLandRoute(mockSource, mockDestination, customSpeedConfig);
 
             // Duration should be recalculated: 300 km / 80 km/h = 3.75 hours = 13500 seconds
-            expect(result.route.estimatedDuration).toBe(13500);
+            // Plus additional time for rest stops (1 stop = 30 min = 1800 seconds)
+            expect(result.route.estimatedDuration).toBe(15300); // 13500 + 1800
         });
 
         it('should use mock data when no API key is provided', async () => {
@@ -656,6 +657,382 @@ describe('RoutingService', () => {
                 { weather: 'storm' } // Storm conditions reduce speed further
             );
             expect(speed).toBeGreaterThanOrEqual(1);
+        });
+    });
+
+    describe('analyzeCrossModeRoute', () => {
+        it('should recommend appropriate modes for short distances', () => {
+            const nearbyDestination: Location = {
+                name: 'Brooklyn Bridge, NY',
+                coordinates: { latitude: 40.7061, longitude: -73.9969 }
+            };
+
+            const analysis = routingService.analyzeCrossModeRoute(mockSource, nearbyDestination, TravelMode.DRIVING);
+
+            expect(analysis.recommendations).toContain('Short distance - walking or cycling recommended');
+            expect(analysis.alternativeModes).toContain(TravelMode.WALKING);
+            expect(analysis.alternativeModes).toContain(TravelMode.CYCLING);
+        });
+
+        it('should recommend flying for very long distances', () => {
+            const farDestination: Location = {
+                name: 'Tokyo, Japan',
+                coordinates: { latitude: 35.6762, longitude: 139.6503 }
+            };
+
+            const analysis = routingService.analyzeCrossModeRoute(mockSource, farDestination, TravelMode.DRIVING);
+
+            expect(analysis.recommendations).toContain('Very long distance - flying recommended for speed');
+            expect(analysis.alternativeModes).toContain(TravelMode.FLYING);
+        });
+
+        it('should identify ocean crossings for land modes', () => {
+            const europeanDestination: Location = {
+                name: 'London, UK',
+                coordinates: { latitude: 51.5074, longitude: -0.1278 }
+            };
+
+            const analysis = routingService.analyzeCrossModeRoute(mockSource, europeanDestination, TravelMode.DRIVING);
+
+            expect(analysis.considerations).toContain('Ocean crossing required - ferry or shipping needed for vehicle');
+        });
+
+        it('should warn about multi-modal journeys for medium distances', () => {
+            // Use coordinates that are approximately 1000 km away (within 500-2000 km range)
+            const mediumDistanceDestination: Location = {
+                name: 'Minneapolis, MN',
+                coordinates: { latitude: 44.9778, longitude: -93.2650 }
+            };
+
+            const analysis = routingService.analyzeCrossModeRoute(mockSource, mediumDistanceDestination, TravelMode.DRIVING);
+
+
+
+            expect(analysis.considerations).toContain('Consider multi-modal journey combining different transport types');
+        });
+    });
+
+    describe('calculateTravelSpeed', () => {
+        it('should return custom speed when provided', () => {
+            const customSpeed = 100;
+            const speed = routingService.calculateTravelSpeed(TravelMode.DRIVING, 500, customSpeed);
+            expect(speed).toBe(customSpeed);
+        });
+
+        it('should return default speed for each travel mode', () => {
+            expect(routingService.calculateTravelSpeed(TravelMode.DRIVING, 100)).toBe(60);
+            expect(routingService.calculateTravelSpeed(TravelMode.WALKING, 10)).toBe(5);
+            expect(routingService.calculateTravelSpeed(TravelMode.CYCLING, 50)).toBe(20);
+            expect(routingService.calculateTravelSpeed(TravelMode.FLYING, 1000)).toBe(800);
+            expect(routingService.calculateTravelSpeed(TravelMode.SAILING, 200)).toBe(15);
+            expect(routingService.calculateTravelSpeed(TravelMode.CRUISE, 300)).toBe(25);
+        });
+
+        it('should adjust speed based on conditions', () => {
+            // Test driving with heavy traffic
+            const heavyTrafficSpeed = routingService.calculateTravelSpeed(
+                TravelMode.DRIVING, 
+                100, 
+                undefined, 
+                { traffic: 'heavy' }
+            );
+            expect(heavyTrafficSpeed).toBe(42); // 60 * 0.7
+
+            // Test sailing with favorable wind
+            const favorableWindSpeed = routingService.calculateTravelSpeed(
+                TravelMode.SAILING, 
+                200, 
+                undefined, 
+                { weather: 'favorable' }
+            );
+            expect(favorableWindSpeed).toBe(19.5); // 15 * 1.3
+
+            // Test flying with headwind
+            const headwindSpeed = routingService.calculateTravelSpeed(
+                TravelMode.FLYING, 
+                1000, 
+                undefined, 
+                { weather: 'headwind' }
+            );
+            expect(headwindSpeed).toBe(720); // 800 * 0.9
+        });
+
+        it('should ensure minimum speed of 1 km/h', () => {
+            const speed = routingService.calculateTravelSpeed(
+                TravelMode.SAILING, 
+                100, 
+                0.5, // Very low custom speed
+                { weather: 'storm' } // Storm conditions reduce speed further
+            );
+            expect(speed).toBeGreaterThanOrEqual(1);
+        });
+    });
+
+    describe('calculateTravelDuration', () => {
+        it('should use custom duration when provided', () => {
+            const customDurationConfig = {
+                ...mockTravelConfig,
+                customDuration: 5 // 5 hours
+            };
+
+            const duration = routingService.calculateTravelDuration(
+                300, // 300 km
+                TravelMode.DRIVING,
+                customDurationConfig
+            );
+
+            expect(duration).toBe(18000); // 5 hours in seconds
+        });
+
+        it('should calculate duration based on speed when no custom duration', () => {
+            const duration = routingService.calculateTravelDuration(
+                300, // 300 km
+                TravelMode.DRIVING,
+                mockTravelConfig
+            );
+
+            // 300 km / 60 km/h = 5 hours = 18000 seconds, plus adjustments
+            expect(duration).toBeGreaterThan(18000);
+        });
+
+        it('should apply mode-specific time adjustments', () => {
+            const longDrivingDuration = routingService.calculateTravelDuration(
+                500, // Long distance requiring rest stops
+                TravelMode.DRIVING,
+                mockTravelConfig
+            );
+
+            const shortDrivingDuration = routingService.calculateTravelDuration(
+                100, // Short distance, no rest stops
+                TravelMode.DRIVING,
+                mockTravelConfig
+            );
+
+            // Long distance should have additional time for rest stops
+            const longDurationHours = longDrivingDuration / 3600;
+            const shortDurationHours = shortDrivingDuration / 3600;
+            const expectedLongDuration = (500 / 60) + 1; // Base time + 1 hour for 2 rest stops
+            const expectedShortDuration = 100 / 60; // Base time only
+
+            expect(longDurationHours).toBeCloseTo(expectedLongDuration, 0);
+            expect(shortDurationHours).toBeCloseTo(expectedShortDuration, 1);
+        });
+
+        it('should handle flying mode with airport procedures', () => {
+            const flyingConfig = { ...mockTravelConfig, mode: TravelMode.FLYING };
+            
+            const duration = routingService.calculateTravelDuration(
+                1000, // 1000 km
+                TravelMode.FLYING,
+                flyingConfig
+            );
+
+            // Should include 1 hour for airport procedures
+            const durationHours = duration / 3600;
+            const expectedDuration = (1000 / 800) + 1; // Flight time + airport procedures
+            
+            expect(durationHours).toBeCloseTo(expectedDuration, 1);
+        });
+    });
+
+    describe('generateWeatherTimeline', () => {
+        it('should generate timeline with appropriate intervals', () => {
+            const mockRoute = {
+                id: 'test-route',
+                source: mockSource,
+                destination: mockDestination,
+                travelMode: TravelMode.DRIVING,
+                waypoints: [
+                    {
+                        coordinates: mockSource.coordinates,
+                        distanceFromStart: 0,
+                        estimatedTimeFromStart: 0
+                    },
+                    {
+                        coordinates: { latitude: 41.5, longitude: -72.5 },
+                        distanceFromStart: 150,
+                        estimatedTimeFromStart: 9000 // 2.5 hours
+                    },
+                    {
+                        coordinates: mockDestination.coordinates,
+                        distanceFromStart: 300,
+                        estimatedTimeFromStart: 18000 // 5 hours
+                    }
+                ],
+                totalDistance: 300,
+                estimatedDuration: 18000,
+                segments: []
+            };
+
+            const startTime = new Date('2024-01-01T08:00:00Z');
+            const timeline = routingService.generateWeatherTimeline(mockRoute, startTime, 3600); // 1 hour intervals
+
+            expect(timeline.length).toBeGreaterThan(3); // Should have more than just waypoints
+            expect(timeline[0].timestamp).toEqual(startTime);
+            
+            // Check that timeline points are properly spaced
+            for (let i = 1; i < timeline.length; i++) {
+                expect(timeline[i].timestamp.getTime()).toBeGreaterThan(timeline[i - 1].timestamp.getTime());
+            }
+        });
+
+        it('should interpolate waypoints for timeline gaps', () => {
+            const mockRoute = {
+                id: 'test-route',
+                source: mockSource,
+                destination: mockDestination,
+                travelMode: TravelMode.DRIVING,
+                waypoints: [
+                    {
+                        coordinates: mockSource.coordinates,
+                        distanceFromStart: 0,
+                        estimatedTimeFromStart: 0
+                    },
+                    {
+                        coordinates: mockDestination.coordinates,
+                        distanceFromStart: 300,
+                        estimatedTimeFromStart: 18000 // 5 hours - large gap
+                    }
+                ],
+                totalDistance: 300,
+                estimatedDuration: 18000,
+                segments: []
+            };
+
+            const startTime = new Date('2024-01-01T08:00:00Z');
+            const timeline = routingService.generateWeatherTimeline(mockRoute, startTime, 3600); // 1 hour intervals
+
+            // Should have interpolated points between start and end
+            expect(timeline.length).toBeGreaterThan(2);
+            
+            // Check that interpolated waypoints have reasonable coordinates
+            const middlePoint = timeline[Math.floor(timeline.length / 2)];
+            expect(middlePoint.waypoint.coordinates.latitude).toBeGreaterThan(Math.min(mockSource.coordinates.latitude, mockDestination.coordinates.latitude));
+            expect(middlePoint.waypoint.coordinates.latitude).toBeLessThan(Math.max(mockSource.coordinates.latitude, mockDestination.coordinates.latitude));
+        });
+    });
+
+    describe('calculateTimeEstimates', () => {
+        it('should provide optimistic, realistic, and pessimistic estimates', () => {
+            const mockRoute = {
+                id: 'test-route',
+                source: mockSource,
+                destination: mockDestination,
+                travelMode: TravelMode.DRIVING,
+                waypoints: [],
+                totalDistance: 300,
+                estimatedDuration: 18000, // 5 hours
+                segments: []
+            };
+
+            const estimates = routingService.calculateTimeEstimates(mockRoute, mockTravelConfig);
+
+            expect(estimates.optimistic).toBeLessThan(estimates.realistic);
+            expect(estimates.realistic).toBeLessThan(estimates.pessimistic);
+            expect(estimates.breakdown.baseTime).toBe(18000);
+            expect(estimates.breakdown.stops).toBeGreaterThan(0);
+            expect(estimates.breakdown.delays).toBeGreaterThan(0);
+            expect(estimates.breakdown.weather).toBeGreaterThan(0);
+        });
+
+        it('should provide different estimates for different travel modes', () => {
+            const drivingRoute = {
+                id: 'driving-route',
+                source: mockSource,
+                destination: mockDestination,
+                travelMode: TravelMode.DRIVING,
+                waypoints: [],
+                totalDistance: 300,
+                estimatedDuration: 18000,
+                segments: []
+            };
+
+            const flyingRoute = { ...drivingRoute, travelMode: TravelMode.FLYING };
+
+            const drivingEstimates = routingService.calculateTimeEstimates(drivingRoute, mockTravelConfig);
+            const flyingEstimates = routingService.calculateTimeEstimates(flyingRoute, { ...mockTravelConfig, mode: TravelMode.FLYING });
+
+            // Flying should have higher variability (larger difference between optimistic and pessimistic)
+            const drivingVariability = drivingEstimates.pessimistic - drivingEstimates.optimistic;
+            const flyingVariability = flyingEstimates.pessimistic - flyingEstimates.optimistic;
+            
+            expect(flyingVariability).toBeGreaterThan(drivingVariability);
+        });
+    });
+
+    describe('validateTravelParameters', () => {
+        it('should validate reasonable speed parameters', () => {
+            const validation = routingService.validateTravelParameters(
+                300, // 300 km
+                TravelMode.DRIVING,
+                undefined,
+                60 // 60 km/h - reasonable speed
+            );
+
+            expect(validation.isValid).toBe(true);
+            expect(validation.warnings).toHaveLength(0);
+        });
+
+        it('should warn about unrealistic speeds', () => {
+            const validation = routingService.validateTravelParameters(
+                300,
+                TravelMode.DRIVING,
+                undefined,
+                200 // 200 km/h - too fast for driving
+            );
+
+            expect(validation.isValid).toBe(false);
+            expect(validation.warnings.length).toBeGreaterThan(0);
+            expect(validation.adjustedSpeed).toBe(150); // Should be adjusted to max reasonable speed
+        });
+
+        it('should warn about unrealistic durations', () => {
+            const validation = routingService.validateTravelParameters(
+                300,
+                TravelMode.DRIVING,
+                1, // 1 hour - too fast for 300 km
+                undefined
+            );
+
+            expect(validation.isValid).toBe(false);
+            expect(validation.warnings.length).toBeGreaterThan(0);
+            expect(validation.adjustedDuration).toBeGreaterThan(1);
+        });
+
+        it('should detect conflicting speed and duration parameters', () => {
+            const validation = routingService.validateTravelParameters(
+                300,
+                TravelMode.DRIVING,
+                10, // 10 hours (30 km/h implied speed)
+                60  // 60 km/h (5 hours implied duration)
+            );
+
+            expect(validation.isValid).toBe(false);
+            expect(validation.warnings.some(w => w.includes('inconsistent'))).toBe(true);
+        });
+
+        it('should validate different travel modes appropriately', () => {
+            // Walking speed validation
+            const walkingValidation = routingService.validateTravelParameters(
+                10,
+                TravelMode.WALKING,
+                undefined,
+                10 // 10 km/h - too fast for walking
+            );
+
+            expect(walkingValidation.isValid).toBe(false);
+            expect(walkingValidation.adjustedSpeed).toBe(8); // Max walking speed
+
+            // Flying speed validation
+            const flyingValidation = routingService.validateTravelParameters(
+                1000,
+                TravelMode.FLYING,
+                undefined,
+                100 // 100 km/h - too slow for flying
+            );
+
+            expect(flyingValidation.isValid).toBe(false);
+            expect(flyingValidation.adjustedSpeed).toBe(200); // Min flying speed
         });
     });
 

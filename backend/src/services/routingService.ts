@@ -378,9 +378,14 @@ export class RoutingService {
                 break;
         }
 
-        // Apply custom speed if provided
-        if (travelConfig.customSpeed) {
-            const newDuration = (route.totalDistance / travelConfig.customSpeed) * 3600; // Convert to seconds
+        // Apply custom speed or duration if provided
+        if (travelConfig.customSpeed || travelConfig.customDuration) {
+            const newDuration = this.calculateTravelDuration(
+                route.totalDistance,
+                travelConfig.mode,
+                travelConfig
+            );
+            
             const speedRatio = newDuration / route.estimatedDuration;
 
             // Update route duration
@@ -802,6 +807,509 @@ export class RoutingService {
     /**
      * Calculate maritime route considering coastlines and shipping lanes
      */
+    /**
+     * Calculate travel speed based on mode, custom parameters, and conditions
+     */
+    calculateTravelSpeed(
+        mode: TravelMode, 
+        distance: number, 
+        customSpeed?: number, 
+        conditions?: { traffic?: string; weather?: string }
+    ): number {
+        // Use custom speed if provided
+        if (customSpeed !== undefined && customSpeed > 0) {
+            return Math.max(customSpeed, 1); // Ensure minimum speed of 1 km/h
+        }
+
+        // Get default speed for the travel mode
+        let baseSpeed = DEFAULT_SPEEDS[mode];
+
+        // Apply condition-based adjustments
+        if (conditions) {
+            baseSpeed = this.applyConditionAdjustments(baseSpeed, mode, conditions);
+        }
+
+        return Math.max(baseSpeed, 1); // Ensure minimum speed of 1 km/h
+    }
+
+    /**
+     * Calculate estimated travel duration based on distance, mode, and configuration
+     */
+    calculateTravelDuration(
+        distance: number,
+        mode: TravelMode,
+        travelConfig: TravelConfig,
+        conditions?: { traffic?: string; weather?: string }
+    ): number {
+        // Use custom duration if provided (convert from hours to seconds)
+        if (travelConfig.customDuration !== undefined && travelConfig.customDuration > 0) {
+            return travelConfig.customDuration * 3600;
+        }
+
+        // Calculate duration based on speed
+        const speed = this.calculateTravelSpeed(mode, distance, travelConfig.customSpeed, conditions);
+        const durationHours = distance / speed;
+        
+        // Add mode-specific time adjustments (stops, delays, etc.)
+        const adjustedDuration = this.applyModeSpecificTimeAdjustments(durationHours, mode, distance);
+        
+        return adjustedDuration * 3600; // Convert to seconds
+    }
+
+    /**
+     * Generate timeline for weather forecast alignment
+     */
+    generateWeatherTimeline(
+        route: Route,
+        startTime: Date = new Date(),
+        weatherUpdateInterval: number = 3600 // seconds
+    ): Array<{ timestamp: Date; waypoint: Waypoint; segmentIndex: number }> {
+        const timeline: Array<{ timestamp: Date; waypoint: Waypoint; segmentIndex: number }> = [];
+        
+        // Add starting point
+        timeline.push({
+            timestamp: new Date(startTime),
+            waypoint: route.waypoints[0],
+            segmentIndex: 0
+        });
+
+        // Generate timeline points based on weather update interval
+        let currentTime = startTime.getTime();
+        let lastWaypointIndex = 0;
+
+        for (let i = 1; i < route.waypoints.length; i++) {
+            const waypoint = route.waypoints[i];
+            const waypointTime = startTime.getTime() + (waypoint.estimatedTimeFromStart * 1000);
+
+            // Add intermediate timeline points if the gap is larger than update interval
+            const timeDiff = waypointTime - currentTime;
+            if (timeDiff > weatherUpdateInterval * 1000) {
+                const numIntervals = Math.floor(timeDiff / (weatherUpdateInterval * 1000));
+                
+                for (let j = 1; j <= numIntervals; j++) {
+                    const intervalTime = currentTime + (j * weatherUpdateInterval * 1000);
+                    
+                    // Interpolate waypoint position for this time
+                    const timeProgress = (intervalTime - currentTime) / timeDiff;
+                    const interpolatedWaypoint = this.interpolateWaypointAtTime(
+                        route.waypoints[lastWaypointIndex],
+                        waypoint,
+                        timeProgress
+                    );
+
+                    timeline.push({
+                        timestamp: new Date(intervalTime),
+                        waypoint: interpolatedWaypoint,
+                        segmentIndex: this.findSegmentIndexForWaypoint(route, interpolatedWaypoint)
+                    });
+                }
+            }
+
+            // Add the actual waypoint
+            timeline.push({
+                timestamp: new Date(waypointTime),
+                waypoint,
+                segmentIndex: this.findSegmentIndexForWaypoint(route, waypoint)
+            });
+
+            currentTime = waypointTime;
+            lastWaypointIndex = i;
+        }
+
+        return timeline;
+    }
+
+    /**
+     * Calculate travel time estimates with different scenarios
+     */
+    calculateTimeEstimates(
+        route: Route,
+        travelConfig: TravelConfig
+    ): {
+        optimistic: number;
+        realistic: number;
+        pessimistic: number;
+        breakdown: {
+            baseTime: number;
+            stops: number;
+            delays: number;
+            weather: number;
+        };
+    } {
+        const baseTime = route.estimatedDuration;
+        
+        // Calculate different scenarios
+        const optimisticMultiplier = this.getTimeMultiplier(route.travelMode, 'optimistic');
+        const realisticMultiplier = this.getTimeMultiplier(route.travelMode, 'realistic');
+        const pessimisticMultiplier = this.getTimeMultiplier(route.travelMode, 'pessimistic');
+
+        // Calculate breakdown components
+        const stops = this.calculateStopTime(route.travelMode, route.totalDistance);
+        const delays = this.calculateDelayTime(route.travelMode, route.totalDistance);
+        const weather = this.calculateWeatherImpact(route.travelMode, route.totalDistance);
+
+        return {
+            optimistic: Math.round(baseTime * optimisticMultiplier),
+            realistic: Math.round(baseTime * realisticMultiplier + stops + delays),
+            pessimistic: Math.round(baseTime * pessimisticMultiplier + stops + delays + weather),
+            breakdown: {
+                baseTime: Math.round(baseTime),
+                stops: Math.round(stops),
+                delays: Math.round(delays),
+                weather: Math.round(weather)
+            }
+        };
+    }
+
+    /**
+     * Validate and adjust travel parameters
+     */
+    validateTravelParameters(
+        distance: number,
+        mode: TravelMode,
+        customDuration?: number,
+        customSpeed?: number
+    ): {
+        isValid: boolean;
+        warnings: string[];
+        adjustedDuration?: number;
+        adjustedSpeed?: number;
+    } {
+        const warnings: string[] = [];
+        let adjustedDuration = customDuration;
+        let adjustedSpeed = customSpeed;
+
+        // Validate custom speed
+        if (customSpeed !== undefined) {
+            const maxSpeed = this.getMaxReasonableSpeed(mode);
+            const minSpeed = this.getMinReasonableSpeed(mode);
+
+            if (customSpeed > maxSpeed) {
+                warnings.push(`Speed ${customSpeed} km/h is unrealistic for ${mode}. Maximum reasonable speed is ${maxSpeed} km/h.`);
+                adjustedSpeed = maxSpeed;
+            }
+
+            if (customSpeed < minSpeed) {
+                warnings.push(`Speed ${customSpeed} km/h is too slow for ${mode}. Minimum reasonable speed is ${minSpeed} km/h.`);
+                adjustedSpeed = minSpeed;
+            }
+        }
+
+        // Validate custom duration
+        if (customDuration !== undefined) {
+            const minDuration = this.getMinReasonableDuration(distance, mode);
+            const maxDuration = this.getMaxReasonableDuration(distance, mode);
+
+            if (customDuration < minDuration) {
+                warnings.push(`Duration ${customDuration} hours is too short for ${distance} km by ${mode}. Minimum reasonable duration is ${minDuration} hours.`);
+                adjustedDuration = minDuration;
+            }
+
+            if (customDuration > maxDuration) {
+                warnings.push(`Duration ${customDuration} hours is very long for ${distance} km by ${mode}. Consider if this is intentional.`);
+            }
+        }
+
+        // Check for conflicting parameters
+        if (customSpeed !== undefined && customDuration !== undefined) {
+            const impliedSpeed = distance / customDuration;
+            const speedDifference = Math.abs(impliedSpeed - customSpeed);
+            
+            if (speedDifference > customSpeed * 0.2) { // More than 20% difference
+                warnings.push(`Custom speed (${customSpeed} km/h) and duration (${customDuration} hours) are inconsistent for distance ${distance} km.`);
+            }
+        }
+
+        return {
+            isValid: warnings.length === 0,
+            warnings,
+            adjustedDuration,
+            adjustedSpeed
+        };
+    }
+
+    private applyConditionAdjustments(
+        baseSpeed: number,
+        mode: TravelMode,
+        conditions: { traffic?: string; weather?: string }
+    ): number {
+        let adjustedSpeed = baseSpeed;
+
+        // Apply traffic conditions (mainly for land travel)
+        if (conditions.traffic && [TravelMode.DRIVING, TravelMode.CYCLING].includes(mode)) {
+            switch (conditions.traffic) {
+                case 'heavy':
+                    adjustedSpeed *= 0.7;
+                    break;
+                case 'moderate':
+                    adjustedSpeed *= 0.85;
+                    break;
+                case 'light':
+                    adjustedSpeed *= 1.1;
+                    break;
+            }
+        }
+
+        // Apply weather conditions
+        if (conditions.weather) {
+            switch (conditions.weather) {
+                case 'storm':
+                    adjustedSpeed *= mode === TravelMode.FLYING ? 0.8 : 0.6;
+                    break;
+                case 'rain':
+                    adjustedSpeed *= mode === TravelMode.FLYING ? 0.9 : 0.8;
+                    break;
+                case 'headwind':
+                    if ([TravelMode.FLYING, TravelMode.SAILING, TravelMode.CYCLING].includes(mode)) {
+                        adjustedSpeed *= 0.9;
+                    }
+                    break;
+                case 'favorable':
+                    if ([TravelMode.SAILING, TravelMode.FLYING].includes(mode)) {
+                        adjustedSpeed *= 1.3;
+                    }
+                    break;
+            }
+        }
+
+        return adjustedSpeed;
+    }
+
+    private applyModeSpecificTimeAdjustments(durationHours: number, mode: TravelMode, distance: number): number {
+        let adjustedDuration = durationHours;
+
+        switch (mode) {
+            case TravelMode.DRIVING:
+                // Add time for rest stops on long drives
+                if (distance > 200) {
+                    const restStops = Math.floor(distance / 200);
+                    adjustedDuration += restStops * 0.5; // 30 minutes per rest stop
+                }
+                break;
+
+            case TravelMode.FLYING:
+                // Add time for takeoff, landing, and taxi
+                adjustedDuration += 1; // 1 hour for airport procedures
+                break;
+
+            case TravelMode.SAILING:
+            case TravelMode.CRUISE:
+                // Add time for tidal considerations and port procedures
+                adjustedDuration += 0.5; // 30 minutes for port procedures
+                break;
+
+            case TravelMode.WALKING:
+                // Add time for breaks on long walks
+                if (distance > 10) {
+                    const breaks = Math.floor(distance / 10);
+                    adjustedDuration += breaks * 0.25; // 15 minutes per break
+                }
+                break;
+
+            case TravelMode.CYCLING:
+                // Add time for breaks on long rides
+                if (distance > 50) {
+                    const breaks = Math.floor(distance / 50);
+                    adjustedDuration += breaks * 0.33; // 20 minutes per break
+                }
+                break;
+        }
+
+        return adjustedDuration;
+    }
+
+    private interpolateWaypointAtTime(
+        startWaypoint: Waypoint,
+        endWaypoint: Waypoint,
+        timeProgress: number
+    ): Waypoint {
+        const distanceProgress = startWaypoint.distanceFromStart + 
+            (endWaypoint.distanceFromStart - startWaypoint.distanceFromStart) * timeProgress;
+        
+        const timeProgress2 = startWaypoint.estimatedTimeFromStart + 
+            (endWaypoint.estimatedTimeFromStart - startWaypoint.estimatedTimeFromStart) * timeProgress;
+
+        return {
+            coordinates: this.interpolateCoordinates(
+                startWaypoint.coordinates,
+                endWaypoint.coordinates,
+                timeProgress
+            ),
+            distanceFromStart: distanceProgress,
+            estimatedTimeFromStart: timeProgress2
+        };
+    }
+
+    private findSegmentIndexForWaypoint(route: Route, waypoint: Waypoint): number {
+        for (let i = 0; i < route.segments.length; i++) {
+            const segment = route.segments[i];
+            if (waypoint.distanceFromStart >= segment.startPoint.distanceFromStart &&
+                waypoint.distanceFromStart <= segment.endPoint.distanceFromStart) {
+                return i;
+            }
+        }
+        return route.segments.length - 1; // Default to last segment
+    }
+
+    private getTimeMultiplier(mode: TravelMode, scenario: 'optimistic' | 'realistic' | 'pessimistic'): number {
+        const multipliers = {
+            [TravelMode.DRIVING]: { optimistic: 0.9, realistic: 1.1, pessimistic: 1.4 },
+            [TravelMode.WALKING]: { optimistic: 0.95, realistic: 1.0, pessimistic: 1.2 },
+            [TravelMode.CYCLING]: { optimistic: 0.9, realistic: 1.1, pessimistic: 1.3 },
+            [TravelMode.FLYING]: { optimistic: 1.0, realistic: 1.2, pessimistic: 1.8 },
+            [TravelMode.SAILING]: { optimistic: 0.8, realistic: 1.3, pessimistic: 2.0 },
+            [TravelMode.CRUISE]: { optimistic: 0.95, realistic: 1.1, pessimistic: 1.4 }
+        };
+
+        return multipliers[mode][scenario];
+    }
+
+    private calculateStopTime(mode: TravelMode, distance: number): number {
+        switch (mode) {
+            case TravelMode.DRIVING:
+                return Math.floor(distance / 200) * 1800; // 30 min stops every 200km
+            case TravelMode.WALKING:
+                return Math.floor(distance / 10) * 900; // 15 min breaks every 10km
+            case TravelMode.CYCLING:
+                return Math.floor(distance / 50) * 1200; // 20 min breaks every 50km
+            case TravelMode.FLYING:
+                return 3600; // 1 hour for airport procedures
+            case TravelMode.SAILING:
+            case TravelMode.CRUISE:
+                return 1800; // 30 min for port procedures
+            default:
+                return 0;
+        }
+    }
+
+    private calculateDelayTime(mode: TravelMode, distance: number): number {
+        const baseDelay = {
+            [TravelMode.DRIVING]: 0.1,
+            [TravelMode.WALKING]: 0.05,
+            [TravelMode.CYCLING]: 0.08,
+            [TravelMode.FLYING]: 0.3,
+            [TravelMode.SAILING]: 0.2,
+            [TravelMode.CRUISE]: 0.15
+        };
+
+        return (distance / DEFAULT_SPEEDS[mode]) * 3600 * baseDelay[mode];
+    }
+
+    private calculateWeatherImpact(mode: TravelMode, distance: number): number {
+        const weatherImpact = {
+            [TravelMode.DRIVING]: 0.05,
+            [TravelMode.WALKING]: 0.15,
+            [TravelMode.CYCLING]: 0.2,
+            [TravelMode.FLYING]: 0.1,
+            [TravelMode.SAILING]: 0.3,
+            [TravelMode.CRUISE]: 0.1
+        };
+
+        return (distance / DEFAULT_SPEEDS[mode]) * 3600 * weatherImpact[mode];
+    }
+
+    private getMaxReasonableSpeed(mode: TravelMode): number {
+        const maxSpeeds = {
+            [TravelMode.DRIVING]: 150,
+            [TravelMode.WALKING]: 8,
+            [TravelMode.CYCLING]: 50,
+            [TravelMode.FLYING]: 1200,
+            [TravelMode.SAILING]: 40,
+            [TravelMode.CRUISE]: 50
+        };
+        return maxSpeeds[mode];
+    }
+
+    private getMinReasonableSpeed(mode: TravelMode): number {
+        const minSpeeds = {
+            [TravelMode.DRIVING]: 20,
+            [TravelMode.WALKING]: 2,
+            [TravelMode.CYCLING]: 8,
+            [TravelMode.FLYING]: 200,
+            [TravelMode.SAILING]: 5,
+            [TravelMode.CRUISE]: 10
+        };
+        return minSpeeds[mode];
+    }
+
+    private getMinReasonableDuration(distance: number, mode: TravelMode): number {
+        const maxSpeed = this.getMaxReasonableSpeed(mode);
+        return distance / maxSpeed;
+    }
+
+    private getMaxReasonableDuration(distance: number, mode: TravelMode): number {
+        const minSpeed = this.getMinReasonableSpeed(mode);
+        return distance / minSpeed;
+    }
+
+    /**
+     * Analyze cross-mode route recommendations
+     */
+    analyzeCrossModeRoute(
+        source: Location,
+        destination: Location,
+        currentMode: TravelMode
+    ): {
+        recommendations: string[];
+        alternativeModes: TravelMode[];
+        considerations: string[];
+    } {
+        const distance = this.calculateHaversineDistance(
+            source.coordinates.latitude,
+            source.coordinates.longitude,
+            destination.coordinates.latitude,
+            destination.coordinates.longitude
+        );
+
+        const recommendations: string[] = [];
+        const alternativeModes: TravelMode[] = [];
+        const considerations: string[] = [];
+
+        // Distance-based recommendations
+        if (distance < 5) {
+            recommendations.push('Short distance - walking or cycling recommended');
+            alternativeModes.push(TravelMode.WALKING, TravelMode.CYCLING);
+        } else if (distance > 1000) {
+            recommendations.push('Very long distance - flying recommended for speed');
+            alternativeModes.push(TravelMode.FLYING);
+        }
+
+        // Geographic considerations
+        const latDiff = Math.abs(destination.coordinates.latitude - source.coordinates.latitude);
+        const lonDiff = Math.abs(destination.coordinates.longitude - source.coordinates.longitude);
+
+        // Check for ocean crossings
+        if (lonDiff > 30 || (lonDiff > 15 && latDiff < 10)) {
+            if ([TravelMode.DRIVING, TravelMode.WALKING, TravelMode.CYCLING].includes(currentMode)) {
+                considerations.push('Ocean crossing required - ferry or shipping needed for vehicle');
+                alternativeModes.push(TravelMode.FLYING, TravelMode.CRUISE);
+            }
+        }
+
+        // Multi-day journey warnings for walking/cycling
+        if ([TravelMode.WALKING, TravelMode.CYCLING].includes(currentMode)) {
+            if (distance > 100) { // More than 100km for walking/cycling
+                considerations.push('Very long journey - plan for multiple days and accommodation');
+            }
+        }
+
+        // Climate zone crossing detection
+        if (latDiff > 15) { // Significant latitude difference indicates climate zone crossing
+            considerations.push('Route crosses climate zones - pack for varying weather conditions');
+        }
+
+        // Multi-modal journey detection
+        if (distance > 500 && distance < 2000) {
+            considerations.push('Consider multi-modal journey combining different transport types');
+        }
+
+        return {
+            recommendations,
+            alternativeModes: [...new Set(alternativeModes)], // Remove duplicates
+            considerations
+        };
+    }
+
     private calculateMaritimeRoute(
         source: Location,
         destination: Location,
@@ -821,13 +1329,13 @@ export class RoutingService {
 
         // Maritime routes are typically 10-20% longer than direct distance due to navigation constraints
         const maritimeDistance = this.calculateMaritimeDistance(source, destination, directDistance);
-        
-        const speed = travelConfig.customSpeed || DEFAULT_SPEEDS[travelConfig.mode];
-        const duration = (maritimeDistance / speed) * 3600; // Convert to seconds
+
+        const speed = this.calculateTravelSpeed(travelConfig.mode, maritimeDistance, travelConfig.customSpeed);
+        const duration = this.calculateTravelDuration(maritimeDistance, travelConfig.mode, travelConfig);
 
         const routeId = this.generateRouteId(source, destination, travelConfig);
 
-        // Create maritime segments following shipping lanes and coastal routes
+        // Create maritime segments considering shipping lanes and coastal navigation
         const segments = this.createMaritimeSegments(source, destination, maritimeDistance, duration, travelConfig);
 
         const route: Route = {
@@ -847,21 +1355,19 @@ export class RoutingService {
         const warnings: string[] = [];
         
         // Add maritime-specific warnings
-        if (maritimeDistance > 5000) {
+        if (maritimeDistance > 1000) {
             warnings.push('Long ocean voyage - plan for weather routing and fuel/supply stops');
         }
-        
-        if (this.crossesEquator(source, destination)) {
+
+        // Check for equator crossing
+        const sourceLat = source.coordinates.latitude;
+        const destLat = destination.coordinates.latitude;
+        if ((sourceLat > 0 && destLat < 0) || (sourceLat < 0 && destLat > 0)) {
             warnings.push('Route crosses equator - expect tropical weather systems and seasonal variations');
         }
 
-        if (this.crossesDateLine(source, destination)) {
-            warnings.push('Route crosses international date line - adjust timing calculations accordingly');
-        }
-
         // Check for high-latitude routes
-        const maxLat = Math.max(Math.abs(source.coordinates.latitude), Math.abs(destination.coordinates.latitude));
-        if (maxLat > 60) {
+        if (Math.abs(sourceLat) > 60 || Math.abs(destLat) > 60) {
             warnings.push('High-latitude route - expect challenging weather conditions and ice hazards');
         }
 
@@ -870,6 +1376,125 @@ export class RoutingService {
             confidence: 0.8, // Good confidence for maritime routes
             warnings
         };
+    }
+
+    private calculateMaritimeDistance(source: Location, destination: Location, directDistance: number): number {
+        // Base maritime distance multiplier
+        let multiplier = 1.15; // 15% longer than direct distance
+
+        // Adjust based on route characteristics
+        const latDiff = Math.abs(destination.coordinates.latitude - source.coordinates.latitude);
+        const lonDiff = Math.abs(destination.coordinates.longitude - source.coordinates.longitude);
+
+        // Coastal routes (small lat/lon differences) have higher multipliers due to coastline following
+        if (latDiff < 5 && lonDiff < 10) {
+            multiplier = 1.3; // 30% longer for coastal navigation
+        }
+
+        // Trans-oceanic routes can be more direct
+        if (lonDiff > 30) {
+            multiplier = 1.1; // Only 10% longer for open ocean
+        }
+
+        return directDistance * multiplier;
+    }
+
+    private createMaritimeSegments(
+        source: Location,
+        destination: Location,
+        totalDistance: number,
+        totalDuration: number,
+        travelConfig: TravelConfig
+    ): RouteSegment[] {
+        const segments: RouteSegment[] = [];
+        const numSegments = Math.min(Math.max(Math.floor(totalDistance / 100), 3), 15); // 3-15 segments
+
+        for (let i = 0; i < numSegments; i++) {
+            const segmentProgress = i / numSegments;
+            const nextSegmentProgress = (i + 1) / numSegments;
+            
+            const startCoords = this.interpolateCoordinates(
+                source.coordinates,
+                destination.coordinates,
+                segmentProgress
+            );
+            
+            const endCoords = this.interpolateCoordinates(
+                source.coordinates,
+                destination.coordinates,
+                nextSegmentProgress
+            );
+
+            const segmentDistance = totalDistance / numSegments;
+            const segmentDuration = totalDuration / numSegments;
+
+            segments.push({
+                startPoint: {
+                    coordinates: startCoords,
+                    distanceFromStart: segmentDistance * i,
+                    estimatedTimeFromStart: segmentDuration * i
+                },
+                endPoint: {
+                    coordinates: endCoords,
+                    distanceFromStart: segmentDistance * (i + 1),
+                    estimatedTimeFromStart: segmentDuration * (i + 1)
+                },
+                distance: segmentDistance,
+                estimatedDuration: segmentDuration,
+                travelMode: travelConfig.mode
+            });
+        }
+
+        return segments;
+    }
+
+    private createFlightSegments(
+        source: Location,
+        destination: Location,
+        totalDistance: number,
+        totalDuration: number,
+        travelConfig: TravelConfig
+    ): RouteSegment[] {
+        const segments: RouteSegment[] = [];
+        const numSegments = Math.min(Math.max(Math.floor(totalDistance / 200), 2), 10); // 2-10 segments
+
+        for (let i = 0; i < numSegments; i++) {
+            const segmentProgress = i / numSegments;
+            const nextSegmentProgress = (i + 1) / numSegments;
+            
+            const startCoords = this.interpolateCoordinates(
+                source.coordinates,
+                destination.coordinates,
+                segmentProgress
+            );
+            
+            const endCoords = this.interpolateCoordinates(
+                source.coordinates,
+                destination.coordinates,
+                nextSegmentProgress
+            );
+
+            const segmentDistance = totalDistance / numSegments;
+            const segmentDuration = totalDuration / numSegments;
+
+            segments.push({
+                startPoint: {
+                    coordinates: startCoords,
+                    distanceFromStart: segmentDistance * i,
+                    estimatedTimeFromStart: segmentDuration * i
+                },
+                endPoint: {
+                    coordinates: endCoords,
+                    distanceFromStart: segmentDistance * (i + 1),
+                    estimatedTimeFromStart: segmentDuration * (i + 1)
+                },
+                distance: segmentDistance,
+                estimatedDuration: segmentDuration,
+                travelMode: travelConfig.mode
+            });
+        }
+
+        return segments;
     }
 
     /**
@@ -1177,105 +1802,7 @@ export class RoutingService {
         return Math.max(baseSpeed, 1); // Minimum 1 km/h
     }
 
-    /**
-     * Handle cross-mode route considerations for complex journeys
-     */
-    analyzeCrossModeRoute(
-        source: Location,
-        destination: Location,
-        primaryMode: TravelMode
-    ): {
-        recommendations: string[];
-        alternativeModes: TravelMode[];
-        considerations: string[];
-    } {
-        const distance = this.calculateHaversineDistance(
-            source.coordinates.latitude,
-            source.coordinates.longitude,
-            destination.coordinates.latitude,
-            destination.coordinates.longitude
-        );
 
-        const recommendations: string[] = [];
-        const alternativeModes: TravelMode[] = [];
-        const considerations: string[] = [];
-
-        // Analyze distance appropriateness for each mode
-        if (distance < 5) {
-            recommendations.push('Short distance - walking or cycling recommended');
-            alternativeModes.push(TravelMode.WALKING, TravelMode.CYCLING);
-        } else if (distance < 50) {
-            recommendations.push('Medium distance - driving or cycling suitable');
-            alternativeModes.push(TravelMode.DRIVING, TravelMode.CYCLING);
-        } else if (distance < 500) {
-            recommendations.push('Long distance - driving recommended');
-            alternativeModes.push(TravelMode.DRIVING);
-            if (this.hasWaterRoute(source, destination)) {
-                alternativeModes.push(TravelMode.CRUISE);
-                considerations.push('Maritime route available - consider cruise for scenic journey');
-            }
-        } else {
-            recommendations.push('Very long distance - flying recommended for speed');
-            alternativeModes.push(TravelMode.FLYING);
-            if (this.hasWaterRoute(source, destination)) {
-                alternativeModes.push(TravelMode.CRUISE);
-                considerations.push('Maritime route available - cruise offers leisurely alternative');
-            }
-        }
-
-        // Cross-mode specific considerations
-        switch (primaryMode) {
-            case TravelMode.FLYING:
-                if (distance < 200) {
-                    considerations.push('Short flight - ground transportation might be faster including airport time');
-                }
-                if (this.crossesOcean(source, destination)) {
-                    considerations.push('Trans-oceanic flight - expect jet lag and weather delays');
-                }
-                break;
-
-            case TravelMode.SAILING:
-            case TravelMode.CRUISE:
-                if (!this.hasWaterRoute(source, destination)) {
-                    considerations.push('No direct water route - may require land connections');
-                    recommendations.push('Consider multi-modal journey with land segments');
-                }
-                if (this.isSeasonalRoute(source, destination)) {
-                    considerations.push('Seasonal route - check for ice conditions and weather windows');
-                }
-                break;
-
-            case TravelMode.DRIVING:
-                if (this.crossesOcean(source, destination)) {
-                    considerations.push('Ocean crossing required - ferry or shipping needed for vehicle');
-                    recommendations.push('Consider flying and renting vehicle at destination');
-                }
-                break;
-
-            case TravelMode.WALKING:
-            case TravelMode.CYCLING:
-                if (distance > 100) {
-                    considerations.push('Very long journey - plan for multiple days and accommodation');
-                    recommendations.push('Consider breaking journey into stages');
-                }
-                if (this.crossesOcean(source, destination)) {
-                    considerations.push('Ocean crossing impossible - alternative transport required');
-                }
-                break;
-        }
-
-        // Weather and seasonal considerations
-        const latDiff = Math.abs(destination.coordinates.latitude - source.coordinates.latitude);
-        if (latDiff > 15) {
-            considerations.push('Route crosses climate zones - pack for varying weather conditions');
-        }
-
-        return {
-            recommendations,
-            alternativeModes,
-            considerations
-        };
-    }
 
     /**
      * Check if there's a viable water route between locations

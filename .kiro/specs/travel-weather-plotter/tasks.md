@@ -48,7 +48,7 @@
   - Write authentication middleware for protected routes
   - _Requirements: 7.1, 7.2, 7.8_
 
-- [ ] 4. Implement routing functionality
+- [x] 4. Implement routing functionality
 - [x] 4.1 Create route calculation service for land travel modes
   - Implement routing service for driving, walking, and cycling modes
   - Write functions to calculate waypoints along routes
@@ -62,7 +62,7 @@
   - Write functions to handle cross-mode route considerations
   - _Requirements: 5.4, 5.5, 5.6, 5.8_
 
-- [ ] 4.3 Implement travel timing and duration calculations
+- [x] 4.3 Implement travel timing and duration calculations
   - Create functions to calculate estimated travel time based on mode and speed
   - Implement custom duration and speed parameter handling
   - Write logic for default speed estimates when parameters not specified
