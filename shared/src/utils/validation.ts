@@ -7,6 +7,7 @@ import { TravelMode, TravelConfig } from '../types/travel.js';
 export interface ValidationResult {
   isValid: boolean;
   errors: string[];
+  suggestions?: string[];
 }
 
 /**
@@ -129,8 +130,17 @@ export function validateLocationString(locationString: string): ValidationResult
     }
   }
 
+  const suggestions: string[] = [];
+  
+  if (errors.length > 0) {
+    suggestions.push('Use a specific location format like "City, State" or "City, Country"');
+    suggestions.push('Avoid special characters and HTML tags');
+    suggestions.push('Try a well-known location name or address');
+  }
+
   return {
     isValid: errors.length === 0,
-    errors
+    errors,
+    suggestions: errors.length > 0 ? suggestions : undefined
   };
 }

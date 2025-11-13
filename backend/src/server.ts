@@ -3,11 +3,13 @@ import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
 import { geocodingService, GeocodingError } from './services/geocodingService.js';
+import { routingService } from './services/routingService.js';
 import { database } from './database/connection.js';
 import { runMigrations, seedDatabase } from './database/migrations.js';
 import { JWTService } from './auth/jwt.js';
 import { AuthService } from './services/authService.js';
 import authRoutes from './routes/auth.js';
+import routingRoutes from './routes/routing.js';
 
 dotenv.config();
 
@@ -52,6 +54,9 @@ app.use(express.urlencoded({ extended: true }));
 // Authentication routes
 app.use('/api/auth', authRoutes);
 
+// Routing routes
+app.use('/api/route', routingRoutes);
+
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
   try {
@@ -88,39 +93,7 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Route calculation endpoint
-app.post('/api/route', (req, res) => {
-  try {
-    // Basic request validation
-    const { source, destination, travelMode, duration, speed } = req.body;
-    
-    if (!source || !destination) {
-      return res.status(400).json({
-        error: {
-          code: 'MISSING_REQUIRED_FIELDS',
-          message: 'Source and destination are required',
-          timestamp: new Date().toISOString(),
-          details: { source: !!source, destination: !!destination }
-        }
-      });
-    }
 
-    // Placeholder response - actual implementation will be in later tasks
-    res.json({ 
-      message: 'Route calculation endpoint - to be implemented',
-      requestData: { source, destination, travelMode, duration, speed },
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: {
-        code: 'ROUTE_CALCULATION_ERROR',
-        message: 'Failed to process route calculation request',
-        timestamp: new Date().toISOString()
-      }
-    });
-  }
-});
 
 // Geocoding endpoint
 app.get('/api/geocode', async (req, res) => {
@@ -250,7 +223,9 @@ app.use('*', (req, res) => {
       timestamp,
       availableEndpoints: [
         'GET /api/health',
-        'POST /api/route',
+        'POST /api/route/calculate',
+        'GET /api/route/health',
+        'POST /api/route/clear-cache',
         'GET /api/geocode',
         'POST /api/auth/register',
         'POST /api/auth/login',
@@ -288,7 +263,9 @@ async function startServer() {
       console.log(`💾 Database: Connected and migrated`);
       console.log(`📋 Available endpoints:`);
       console.log(`   GET  /api/health              - Health check`);
-      console.log(`   POST /api/route               - Route calculation`);
+      console.log(`   POST /api/route/calculate     - Route calculation`);
+      console.log(`   GET  /api/route/health        - Route service health`);
+      console.log(`   POST /api/route/clear-cache   - Clear route cache`);
       console.log(`   GET  /api/geocode             - Location geocoding`);
       console.log(`   POST /api/auth/register       - User registration`);
       console.log(`   POST /api/auth/login          - User login`);
@@ -314,6 +291,9 @@ const cleanupInterval = setInterval(async () => {
   try {
     // Clear expired geocoding cache
     geocodingService.clearExpiredCache();
+    
+    // Clear expired routing cache
+    routingService.clearExpiredCache();
     
     // Clean up expired refresh tokens
     const expiredTokens = await JWTService.cleanupExpiredTokens();

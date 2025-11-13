@@ -49,7 +49,7 @@
   - _Requirements: 7.1, 7.2, 7.8_
 
 - [ ] 4. Implement routing functionality
-- [ ] 4.1 Create route calculation service for land travel modes
+- [x] 4.1 Create route calculation service for land travel modes
   - Implement routing service for driving, walking, and cycling modes
   - Write functions to calculate waypoints along routes
   - Create route optimization logic based on travel mode
