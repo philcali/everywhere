@@ -51,6 +51,18 @@ export async function runMigrations(): Promise<void> {
       )
     `);
 
+    // Create password_reset_tokens table for password reset functionality
+    await database.run(`
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        token TEXT UNIQUE NOT NULL,
+        expires_at DATETIME NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+      )
+    `);
+
     // Create indexes for better performance
     await database.run(`
       CREATE INDEX IF NOT EXISTS idx_users_email ON users (email)
@@ -70,6 +82,14 @@ export async function runMigrations(): Promise<void> {
 
     await database.run(`
       CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens (token)
+    `);
+
+    await database.run(`
+      CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_id ON password_reset_tokens (user_id)
+    `);
+
+    await database.run(`
+      CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token ON password_reset_tokens (token)
     `);
 
     console.log('Database migrations completed successfully');

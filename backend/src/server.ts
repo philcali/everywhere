@@ -6,6 +6,8 @@ import { geocodingService, GeocodingError } from './services/geocodingService.js
 import { database } from './database/connection.js';
 import { runMigrations, seedDatabase } from './database/migrations.js';
 import { JWTService } from './auth/jwt.js';
+import { AuthService } from './services/authService.js';
+import authRoutes from './routes/auth.js';
 
 dotenv.config();
 
@@ -46,6 +48,9 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Authentication routes
+app.use('/api/auth', authRoutes);
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
@@ -246,7 +251,15 @@ app.use('*', (req, res) => {
       availableEndpoints: [
         'GET /api/health',
         'POST /api/route',
-        'GET /api/geocode'
+        'GET /api/geocode',
+        'POST /api/auth/register',
+        'POST /api/auth/login',
+        'POST /api/auth/refresh',
+        'POST /api/auth/logout',
+        'POST /api/auth/logout-all',
+        'POST /api/auth/password-reset',
+        'POST /api/auth/password-reset/confirm',
+        'GET /api/auth/me'
       ]
     }
   });
@@ -274,9 +287,17 @@ async function startServer() {
       console.log(`⏰ Started at: ${new Date().toISOString()}`);
       console.log(`💾 Database: Connected and migrated`);
       console.log(`📋 Available endpoints:`);
-      console.log(`   GET  /api/health   - Health check`);
-      console.log(`   POST /api/route    - Route calculation`);
-      console.log(`   GET  /api/geocode  - Location geocoding`);
+      console.log(`   GET  /api/health              - Health check`);
+      console.log(`   POST /api/route               - Route calculation`);
+      console.log(`   GET  /api/geocode             - Location geocoding`);
+      console.log(`   POST /api/auth/register       - User registration`);
+      console.log(`   POST /api/auth/login          - User login`);
+      console.log(`   POST /api/auth/refresh        - Refresh tokens`);
+      console.log(`   POST /api/auth/logout         - User logout`);
+      console.log(`   POST /api/auth/logout-all     - Logout from all devices`);
+      console.log(`   POST /api/auth/password-reset - Request password reset`);
+      console.log(`   POST /api/auth/password-reset/confirm - Confirm password reset`);
+      console.log(`   GET  /api/auth/me             - Get user profile`);
     });
 
     return server;
@@ -298,6 +319,12 @@ const cleanupInterval = setInterval(async () => {
     const expiredTokens = await JWTService.cleanupExpiredTokens();
     if (expiredTokens > 0) {
       console.log(`🧹 Cleaned up ${expiredTokens} expired refresh tokens`);
+    }
+
+    // Clean up expired password reset tokens
+    const expiredResetTokens = await AuthService.cleanupExpiredResetTokens();
+    if (expiredResetTokens > 0) {
+      console.log(`🧹 Cleaned up ${expiredResetTokens} expired password reset tokens`);
     }
   } catch (error) {
     console.error('Error during periodic cleanup:', error);
