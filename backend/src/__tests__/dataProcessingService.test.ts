@@ -607,4 +607,383 @@ describe('DataProcessingService', () => {
       expect(result.warnings.length).toBeGreaterThan(0);
     });
   });
+
+  describe('spatialWeatherInterpolation', () => {
+    it('should create interpolated points between waypoints', () => {
+      const result = service.spatialWeatherInterpolation(
+        mockRoute.waypoints,
+        mockWeatherData,
+        50 // 50km resolution
+      );
+
+      expect(result.originalPoints).toEqual(mockWeatherData);
+      expect(result.interpolatedPoints.length).toBeGreaterThan(0);
+      expect(result.spatialResolution).toBe(50);
+      expect(result.interpolationMethod).toBe('linear');
+      expect(result.confidence).toBeGreaterThan(0);
+    });
+
+    it('should handle insufficient data gracefully', () => {
+      const result = service.spatialWeatherInterpolation(
+        [mockRoute.waypoints[0]], // Only one waypoint
+        [mockWeatherData[0]], // Only one weather point
+        10
+      );
+
+      expect(result.interpolatedPoints).toHaveLength(0);
+      expect(result.confidence).toBeGreaterThan(0);
+    });
+
+    it('should interpolate weather properties correctly', () => {
+      const result = service.spatialWeatherInterpolation(
+        mockRoute.waypoints,
+        mockWeatherData,
+        100
+      );
+
+      result.interpolatedPoints.forEach(point => {
+        expect(point.temperature.current).toBeGreaterThan(0);
+        expect(point.wind.speed).toBeGreaterThanOrEqual(0);
+        expect(point.humidity).toBeGreaterThanOrEqual(0);
+        expect(point.humidity).toBeLessThanOrEqual(100);
+        expect(point.visibility).toBeGreaterThan(0);
+      });
+    });
+
+    it('should create points with appropriate coordinates', () => {
+      const result = service.spatialWeatherInterpolation(
+        mockRoute.waypoints,
+        mockWeatherData,
+        75
+      );
+
+      result.interpolatedPoints.forEach(point => {
+        expect(point.location.coordinates.latitude).toBeGreaterThanOrEqual(40);
+        expect(point.location.coordinates.latitude).toBeLessThanOrEqual(43);
+        expect(point.location.coordinates.longitude).toBeGreaterThanOrEqual(-75);
+        expect(point.location.coordinates.longitude).toBeLessThanOrEqual(-71);
+      });
+    });
+  });
+
+  describe('temporalWeatherInterpolation', () => {
+    it('should create interpolated points over time', () => {
+      const endTime = new Date(startTime.getTime() + 4 * 60 * 60 * 1000); // 4 hours later
+      
+      const result = service.temporalWeatherInterpolation(
+        mockWeatherData,
+        startTime,
+        endTime,
+        60 // 60 minute resolution
+      );
+
+      expect(result.originalPoints).toEqual(mockWeatherData);
+      expect(result.interpolatedPoints.length).toBeGreaterThan(0);
+      expect(result.temporalResolution).toBe(60);
+      expect(result.interpolationMethod).toBe('linear');
+    });
+
+    it('should handle insufficient temporal data', () => {
+      const endTime = new Date(startTime.getTime() + 2 * 60 * 60 * 1000);
+      
+      const result = service.temporalWeatherInterpolation(
+        [mockWeatherData[0]], // Only one point
+        startTime,
+        endTime,
+        30
+      );
+
+      expect(result.interpolatedPoints).toHaveLength(0);
+    });
+
+    it('should interpolate timestamps correctly', () => {
+      const endTime = new Date(startTime.getTime() + 4 * 60 * 60 * 1000);
+      
+      const result = service.temporalWeatherInterpolation(
+        mockWeatherData,
+        startTime,
+        endTime,
+        120 // 2 hour resolution
+      );
+
+      result.interpolatedPoints.forEach(point => {
+        expect(point.timestamp.getTime()).toBeGreaterThanOrEqual(startTime.getTime());
+        expect(point.timestamp.getTime()).toBeLessThanOrEqual(endTime.getTime());
+      });
+    });
+
+    it('should maintain weather property ranges', () => {
+      const endTime = new Date(startTime.getTime() + 4 * 60 * 60 * 1000);
+      
+      const result = service.temporalWeatherInterpolation(
+        mockWeatherData,
+        startTime,
+        endTime,
+        90
+      );
+
+      result.interpolatedPoints.forEach(point => {
+        expect(point.temperature.current).toBeGreaterThanOrEqual(5);
+        expect(point.temperature.current).toBeLessThanOrEqual(20);
+        expect(point.wind.direction).toBeGreaterThanOrEqual(0);
+        expect(point.wind.direction).toBeLessThan(360);
+      });
+    });
+  });
+
+  describe('identifyWeatherPatternChanges', () => {
+    let mockTimeline: any[];
+
+    beforeEach(async () => {
+      const integration = await service.integrateRouteWithWeather(
+        mockRoute,
+        mockWeatherData,
+        startTime
+      );
+      mockTimeline = integration.timeline;
+    });
+
+    it('should identify condition changes', () => {
+      const changes = service.identifyWeatherPatternChanges(mockTimeline, 0.1);
+
+      expect(changes.length).toBeGreaterThan(0);
+      
+      const conditionChanges = changes.filter(change => 
+        change.fromCondition !== change.toCondition
+      );
+      expect(conditionChanges.length).toBeGreaterThan(0);
+    });
+
+    it('should calculate change severity correctly', () => {
+      const changes = service.identifyWeatherPatternChanges(mockTimeline, 0.1);
+
+      changes.forEach(change => {
+        expect(['minor', 'moderate', 'major']).toContain(change.severity);
+        expect(change.description).toBeDefined();
+        expect(change.travelImpact).toBeDefined();
+      });
+    });
+
+    it('should identify temperature changes', () => {
+      // Create timeline with significant temperature change
+      const extremeWeatherData = [
+        { ...mockWeatherData[0], temperature: { current: 25, feelsLike: 25, min: 20, max: 30 } },
+        { ...mockWeatherData[1], temperature: { current: 5, feelsLike: 2, min: 0, max: 8 } },
+        { ...mockWeatherData[2], temperature: { current: -5, feelsLike: -10, min: -10, max: 0 } }
+      ];
+
+      const integration = service.integrateRouteWithWeather(
+        mockRoute,
+        extremeWeatherData,
+        startTime
+      );
+
+      return integration.then(result => {
+        const changes = service.identifyWeatherPatternChanges(result.timeline, 0.1);
+        
+        const tempChanges = changes.filter(change => 
+          change.description.includes('temperature change')
+        );
+        expect(tempChanges.length).toBeGreaterThan(0);
+      });
+    });
+
+    it('should identify precipitation changes', () => {
+      const changes = service.identifyWeatherPatternChanges(mockTimeline, 0.1);
+
+      const precipChanges = changes.filter(change => 
+        change.description.includes('Precipitation change')
+      );
+      expect(precipChanges.length).toBeGreaterThan(0);
+    });
+
+    it('should respect sensitivity threshold', () => {
+      const sensitiveChanges = service.identifyWeatherPatternChanges(mockTimeline, 0.1);
+      const insensitiveChanges = service.identifyWeatherPatternChanges(mockTimeline, 0.8);
+
+      expect(sensitiveChanges.length).toBeGreaterThanOrEqual(insensitiveChanges.length);
+    });
+
+    it('should handle empty timeline', () => {
+      const changes = service.identifyWeatherPatternChanges([], 0.3);
+      expect(changes).toHaveLength(0);
+    });
+
+    it('should handle single point timeline', () => {
+      const changes = service.identifyWeatherPatternChanges([mockTimeline[0]], 0.3);
+      expect(changes).toHaveLength(0);
+    });
+  });
+
+  describe('calculateTravelModeWeatherConsiderations', () => {
+    it('should provide considerations for walking mode', () => {
+      const considerations = service.calculateTravelModeWeatherConsiderations(
+        TravelMode.WALKING,
+        mockWeatherData
+      );
+
+      expect(considerations.travelMode).toBe(TravelMode.WALKING);
+      expect(considerations.weatherFactors).toBeDefined();
+      expect(considerations.weatherFactors.temperature.optimal).toBeDefined();
+      expect(considerations.recommendations).toBeDefined();
+      expect(considerations.warnings).toBeDefined();
+    });
+
+    it('should provide considerations for cycling mode', () => {
+      const considerations = service.calculateTravelModeWeatherConsiderations(
+        TravelMode.CYCLING,
+        mockWeatherData
+      );
+
+      expect(considerations.travelMode).toBe(TravelMode.CYCLING);
+      expect(considerations.weatherFactors.wind.optimal).toBeLessThan(
+        considerations.weatherFactors.wind.warning
+      );
+    });
+
+    it('should provide considerations for driving mode', () => {
+      const considerations = service.calculateTravelModeWeatherConsiderations(
+        TravelMode.DRIVING,
+        mockWeatherData
+      );
+
+      expect(considerations.travelMode).toBe(TravelMode.DRIVING);
+      expect(considerations.weatherFactors.visibility.dangerous).toBeLessThan(
+        considerations.weatherFactors.visibility.warning
+      );
+    });
+
+    it('should provide considerations for flying mode', () => {
+      const considerations = service.calculateTravelModeWeatherConsiderations(
+        TravelMode.FLYING,
+        mockWeatherData
+      );
+
+      expect(considerations.travelMode).toBe(TravelMode.FLYING);
+      expect(considerations.weatherFactors.temperature.dangerous.min).toBeLessThan(
+        considerations.weatherFactors.temperature.warning.min
+      );
+    });
+
+    it('should provide considerations for sailing mode', () => {
+      const considerations = service.calculateTravelModeWeatherConsiderations(
+        TravelMode.SAILING,
+        mockWeatherData
+      );
+
+      expect(considerations.travelMode).toBe(TravelMode.SAILING);
+      expect(considerations.weatherFactors.wind.optimal).toBeGreaterThan(0);
+    });
+
+    it('should provide considerations for cruise mode', () => {
+      const considerations = service.calculateTravelModeWeatherConsiderations(
+        TravelMode.CRUISE,
+        mockWeatherData
+      );
+
+      expect(considerations.travelMode).toBe(TravelMode.CRUISE);
+      expect(considerations.weatherFactors.wind.dangerous).toBeGreaterThan(
+        considerations.weatherFactors.wind.warning
+      );
+    });
+
+    it('should generate warnings for dangerous conditions', () => {
+      const dangerousWeatherData = [
+        {
+          ...mockWeatherData[0],
+          temperature: { current: -15, feelsLike: -20, min: -20, max: -10 },
+          wind: { speed: 70, direction: 180 },
+          precipitation: { type: PrecipitationType.HAIL, probability: 90, intensity: 8 },
+          visibility: 0.5
+        }
+      ];
+
+      const considerations = service.calculateTravelModeWeatherConsiderations(
+        TravelMode.WALKING,
+        dangerousWeatherData
+      );
+
+      expect(considerations.warnings.length).toBeGreaterThan(0);
+      expect(considerations.warnings.some(w => w.includes('Dangerous'))).toBe(true);
+    });
+
+    it('should generate appropriate recommendations', () => {
+      const coldWeatherData = [
+        {
+          ...mockWeatherData[0],
+          temperature: { current: 5, feelsLike: 2, min: 0, max: 8 },
+          precipitation: { type: PrecipitationType.RAIN, probability: 70, intensity: 4 }
+        }
+      ];
+
+      const considerations = service.calculateTravelModeWeatherConsiderations(
+        TravelMode.WALKING,
+        coldWeatherData
+      );
+
+      expect(considerations.recommendations.length).toBeGreaterThan(0);
+      expect(considerations.recommendations.some(r => 
+        r.includes('warm clothing') || r.includes('waterproof')
+      )).toBe(true);
+    });
+
+    it('should handle empty weather data', () => {
+      const considerations = service.calculateTravelModeWeatherConsiderations(
+        TravelMode.DRIVING,
+        []
+      );
+
+      expect(considerations.travelMode).toBe(TravelMode.DRIVING);
+      expect(considerations.weatherFactors).toBeDefined();
+      expect(considerations.recommendations).toBeDefined();
+      expect(considerations.warnings).toBeDefined();
+    });
+
+    it('should provide mode-specific precipitation warnings', () => {
+      const snowyWeatherData = [
+        {
+          ...mockWeatherData[0],
+          precipitation: { type: PrecipitationType.SNOW, probability: 80, intensity: 6 },
+          conditions: { main: WeatherCondition.SNOWY, description: 'Heavy snow', icon: '13d' }
+        }
+      ];
+
+      const walkingConsiderations = service.calculateTravelModeWeatherConsiderations(
+        TravelMode.WALKING,
+        snowyWeatherData
+      );
+
+      const drivingConsiderations = service.calculateTravelModeWeatherConsiderations(
+        TravelMode.DRIVING,
+        snowyWeatherData
+      );
+
+      // Walking should have more severe warnings for snow than driving
+      expect(walkingConsiderations.warnings.length).toBeGreaterThan(0);
+      expect(drivingConsiderations.warnings.length).toBeGreaterThan(0);
+    });
+
+    it('should provide wind-specific considerations for different modes', () => {
+      const windyWeatherData = [
+        {
+          ...mockWeatherData[0],
+          wind: { speed: 45, direction: 270 }
+        }
+      ];
+
+      const cyclingConsiderations = service.calculateTravelModeWeatherConsiderations(
+        TravelMode.CYCLING,
+        windyWeatherData
+      );
+
+      const sailingConsiderations = service.calculateTravelModeWeatherConsiderations(
+        TravelMode.SAILING,
+        windyWeatherData
+      );
+
+      // Both should have wind-related content, but different implications
+      expect(cyclingConsiderations.warnings.some(w => w.includes('wind'))).toBe(true);
+      expect(sailingConsiderations.recommendations.some(r => r.includes('wind'))).toBe(true);
+    });
+  });
 });
