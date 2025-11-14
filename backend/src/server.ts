@@ -12,6 +12,7 @@ import { AuthService } from './services/authService.js';
 import authRoutes from './routes/auth.js';
 import routingRoutes from './routes/routing.js';
 import weatherRoutes from './routes/weather.js';
+import journalRoutes from './routes/journal.js';
 
 dotenv.config();
 
@@ -61,6 +62,9 @@ app.use('/api/route', routingRoutes);
 
 // Weather routes
 app.use('/api/weather', weatherRoutes);
+
+// Journal routes
+app.use('/api/journal', journalRoutes);
 
 // Health check endpoint
 app.get('/api/health', async (req, res) => {
@@ -243,7 +247,18 @@ app.use('*', (req, res) => {
         'POST /api/auth/logout-all',
         'POST /api/auth/password-reset',
         'POST /api/auth/password-reset/confirm',
-        'GET /api/auth/me'
+        'GET /api/auth/me',
+        'POST /api/journal',
+        'GET /api/journal',
+        'GET /api/journal/:id',
+        'PUT /api/journal/:id',
+        'DELETE /api/journal/:id',
+        'GET /api/journal/stats',
+        'GET /api/journal/tags',
+        'GET /api/journal/:id/export',
+        'GET /api/journal/export/all',
+        'GET /api/journal/search',
+        'GET /api/journal/recent'
       ]
     }
   });
@@ -288,6 +303,17 @@ async function startServer() {
       console.log(`   POST /api/auth/password-reset - Request password reset`);
       console.log(`   POST /api/auth/password-reset/confirm - Confirm password reset`);
       console.log(`   GET  /api/auth/me             - Get user profile`);
+      console.log(`   POST /api/journal             - Save journey`);
+      console.log(`   GET  /api/journal             - Get journeys`);
+      console.log(`   GET  /api/journal/:id         - Get specific journey`);
+      console.log(`   PUT  /api/journal/:id         - Update journey`);
+      console.log(`   DELETE /api/journal/:id       - Delete journey`);
+      console.log(`   GET  /api/journal/stats       - Get journey statistics`);
+      console.log(`   GET  /api/journal/tags        - Get user tags`);
+      console.log(`   GET  /api/journal/:id/export  - Export journey`);
+      console.log(`   GET  /api/journal/export/all  - Export all journeys`);
+      console.log(`   GET  /api/journal/search      - Search journeys`);
+      console.log(`   GET  /api/journal/recent      - Get recent journeys`);
     });
 
     return server;
