@@ -7,6 +7,8 @@ on:
 jobs:
   validate-pr:
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     
     steps:
     - name: Checkout code
@@ -46,15 +48,7 @@ jobs:
     
     - name: Build affected packages
       run: |
-        if [ "${{ steps.changes.outputs.shared }}" -gt 0 ]; then
-          cd shared && npm run build
-        fi
-        if [ "${{ steps.changes.outputs.backend }}" -gt 0 ] || [ "${{ steps.changes.outputs.shared }}" -gt 0 ]; then
-          cd backend && npm run build
-        fi
-        if [ "${{ steps.changes.outputs.frontend }}" -gt 0 ] || [ "${{ steps.changes.outputs.shared }}" -gt 0 ]; then
-          cd frontend && npm run build
-        fi
+        npm run build
     
     - name: Comment PR with build status
       if: always()
