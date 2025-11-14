@@ -6,7 +6,7 @@ import { TravelMode } from '@shared/types/travel.js';
 
 // Mock the services with proper error classes
 vi.mock('../services/routingService.js', async () => {
-    const actual = await vi.importActual('../services/routingService.js');
+    const actual = await vi.importActual('../services/routingService.js') as any;
     return {
         ...actual,
         routingService: {
@@ -19,7 +19,7 @@ vi.mock('../services/routingService.js', async () => {
 });
 
 vi.mock('../services/geocodingService.js', async () => {
-    const actual = await vi.importActual('../services/geocodingService.js');
+    const actual = await vi.importActual('../services/geocodingService.js') as any;
     return {
         ...actual,
         geocodingService: {

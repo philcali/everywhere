@@ -20,7 +20,7 @@ export enum ErrorCode {
  * Creates a standardized error response
  */
 export function createErrorResponse(
-  code: ErrorCode,
+  code: string,
   message: string,
   details?: any,
   suggestions?: string[]

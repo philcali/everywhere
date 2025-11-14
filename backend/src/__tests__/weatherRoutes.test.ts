@@ -374,7 +374,7 @@ describe('Weather Routes', () => {
                 name: 'Boston, MA',
                 coordinates: { latitude: 42.3601, longitude: -71.0589 }
             },
-            travelMode: 'driving',
+            travelMode: TravelMode.DRIVING,
             totalDistance: 300,
             estimatedDuration: 14400,
             segments: [],
