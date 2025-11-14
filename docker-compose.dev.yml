@@ -1,0 +1,124 @@
+# ==============================================
+# Travel Weather Plotter - Development Docker Compose
+# ==============================================
+
+version: '3.8'
+
+services:
+  # ==============================================
+  # Development Application Service
+  # ==============================================
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: travel-weather-plotter-dev
+    restart: unless-stopped
+    ports:
+      - "3001:3001"  # Backend API
+      - "5173:5173"  # Frontend Vite dev server
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - DATABASE_URL=/app/data/travel_weather.db
+      - FRONTEND_URL=http://localhost:5173
+      - JWT_SECRET=development_jwt_secret
+      - USE_MOCK_APIS=true
+      - WEATHER_API_KEY=${WEATHER_API_KEY}
+      - ROUTING_API_KEY=${ROUTING_API_KEY}
+      - GEOCODING_API_KEY=${GEOCODING_API_KEY}
+    volumes:
+      # Mount source code for hot reloading
+      - ./shared:/app/shared
+      - ./backend:/app/backend
+      - ./frontend:/app/frontend
+      - ./package.json:/app/package.json
+      - ./tsconfig.json:/app/tsconfig.json
+      # Persist data and uploads
+      - dev_data:/app/data
+      - dev_uploads:/app/uploads
+      # Exclude node_modules from mounting
+      - /app/shared/node_modules
+      - /app/backend/node_modules
+      - /app/frontend/node_modules
+    networks:
+      - travel-weather-dev-network
+    stdin_open: true
+    tty: true
+
+  # ==============================================
+  # Development Database (PostgreSQL Alternative)
+  # ==============================================
+  postgres-dev:
+    image: postgres:15-alpine
+    container_name: travel-weather-postgres-dev
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=travel_weather_dev
+      - POSTGRES_USER=dev_user
+      - POSTGRES_PASSWORD=dev_password
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - travel-weather-dev-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev_user -d travel_weather_dev"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ==============================================
+  # Redis for Development
+  # ==============================================
+  redis-dev:
+    image: redis:7-alpine
+    container_name: travel-weather-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    networks:
+      - travel-weather-dev-network
+    command: redis-server --appendonly yes
+
+  # ==============================================
+  # MailHog for Email Testing
+  # ==============================================
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: travel-weather-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+    networks:
+      - travel-weather-dev-network
+
+# ==============================================
+# Networks
+# ==============================================
+networks:
+  travel-weather-dev-network:
+    driver: bridge
+    name: travel-weather-dev-network
+
+# ==============================================
+# Volumes
+# ==============================================
+volumes:
+  dev_data:
+    driver: local
+    name: travel-weather-dev-data
+  dev_uploads:
+    driver: local
+    name: travel-weather-dev-uploads
+  postgres_dev_data:
+    driver: local
+    name: travel-weather-postgres-dev
+  redis_dev_data:
+    driver: local
+    name: travel-weather-redis-dev

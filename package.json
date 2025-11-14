@@ -19,7 +19,21 @@
     "test:shared": "cd shared && npm run test",
     "test:backend": "cd backend && npm run test",
     "test:frontend": "cd frontend && npm run test",
-    "install:all": "npm install && cd frontend && npm install && cd ../backend && npm install && cd ../shared && npm install"
+    "install:all": "npm install && cd frontend && npm install && cd ../backend && npm install && cd ../shared && npm install",
+    "docker:start": "./docker-scripts/start.sh",
+    "docker:start:dev": "./docker-scripts/start.sh --dev",
+    "docker:start:prod": "./docker-scripts/start.sh --prod",
+    "docker:stop": "./docker-scripts/stop.sh",
+    "docker:stop:dev": "./docker-scripts/stop.sh --dev",
+    "docker:stop:prod": "./docker-scripts/stop.sh --prod",
+    "docker:logs": "./docker-scripts/logs.sh",
+    "docker:logs:dev": "./docker-scripts/logs.sh --dev",
+    "docker:logs:follow": "./docker-scripts/logs.sh --follow",
+    "docker:backup": "./docker-scripts/backup.sh",
+    "docker:backup:dev": "./docker-scripts/backup.sh --dev",
+    "docker:restore": "./docker-scripts/restore.sh",
+    "docker:build": "docker build -t travel-weather-plotter .",
+    "docker:build:dev": "docker build -f Dockerfile.dev -t travel-weather-plotter:dev ."
   },
   "devDependencies": {
     "concurrently": "^8.2.0"
