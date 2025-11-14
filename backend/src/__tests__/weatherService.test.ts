@@ -3,6 +3,7 @@ import { WeatherService, WeatherError } from '../services/weatherService.js';
 import { WeatherCondition, PrecipitationType } from '@shared/types/weather.js';
 import { Location } from '@shared/types/location.js';
 import { Route } from '@shared/types/route.js';
+import { TravelMode } from '@shared/index.js';
 
 // Mock fetch globally before any imports
 const mockFetch = vi.fn();
@@ -662,7 +663,7 @@ describe('WeatherService', () => {
                 coordinates: { latitude: 42.3601, longitude: -71.0589 },
                 address: 'Boston, MA, USA'
             },
-            travelMode: 'driving' as const,
+            travelMode: TravelMode.DRIVING,
             totalDistance: 300,
             estimatedDuration: 14400, // 4 hours
             segments: [],
@@ -865,7 +866,7 @@ describe('WeatherService', () => {
             it('should adjust sampling interval based on travel mode', async () => {
                 const walkingRoute = {
                     ...mockRoute,
-                    travelMode: 'walking' as const,
+                    travelMode: TravelMode.WALKING,
                     totalDistance: 20,
                     waypoints: Array.from({ length: 10 }, (_, i) => ({
                         coordinates: { 

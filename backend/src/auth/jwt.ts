@@ -30,11 +30,15 @@ export interface RefreshTokenRow {
 
 export class JWTService {
   static generateAccessToken(payload: Omit<TokenPayload, 'iat' | 'exp'>): string {
-    return jwt.sign(payload, JWT_SECRET, {
-      expiresIn: JWT_EXPIRES_IN,
-      issuer: 'travel-weather-plotter',
-      audience: 'travel-weather-plotter-client'
-    });
+    return jwt.sign(
+      payload,
+      JWT_SECRET,
+      {
+        expiresIn: JWT_EXPIRES_IN,
+        issuer: 'travel-weather-plotter',
+        audience: 'travel-weather-plotter-client'
+      } as jwt.SignOptions
+    );
   }
 
   static generateRefreshToken(): string {
@@ -77,8 +81,8 @@ export class JWTService {
 
   static async verifyRefreshToken(token: string): Promise<{ userId: number; email: string } | null> {
     try {
-      const row = await database.get<RefreshTokenRow>(`
-        SELECT rt.*, u.email 
+      const row = await database.get<TokenPayload>(`
+        SELECT rt.*, u.email, u.id as userId
         FROM refresh_tokens rt
         JOIN users u ON rt.user_id = u.id
         WHERE rt.token = ? AND rt.expires_at > datetime('now')
@@ -89,7 +93,7 @@ export class JWTService {
       }
 
       return {
-        userId: row.user_id,
+        userId: row.userId,
         email: row.email
       };
     } catch (error) {

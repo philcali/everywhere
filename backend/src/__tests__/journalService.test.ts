@@ -129,10 +129,15 @@ describe('JournalService', () => {
 
     it('should save a journey without optional fields', async () => {
       const journeyData = createTestJourneyData();
-      delete journeyData.description;
-      delete journeyData.metadata;
+      const journeyWithoutData = {
+        ...journeyData,
+        description: undefined,
+        metadata: {
+          tags: [],
+        }
+      }
 
-      const savedJourney = await JournalService.saveJourney(testUserId, journeyData);
+      const savedJourney = await JournalService.saveJourney(testUserId, journeyWithoutData);
 
       expect(savedJourney).toBeDefined();
       expect(savedJourney.description).toBeUndefined();

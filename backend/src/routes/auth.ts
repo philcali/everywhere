@@ -239,10 +239,10 @@ router.post('/logout', async (req: Request, res: Response) => {
  * POST /api/auth/logout-all
  * Logout user from all devices
  */
-router.post('/logout-all', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/logout-all', requireAuth, async (req: Request, res: Response) => {
   try {
     const requestId = req.headers['x-request-id'] as string;
-    const revokedCount = await AuthService.logoutAll(req.userId);
+    const revokedCount = await AuthService.logoutAll(req.userId!);
 
     res.json({
       success: true,
@@ -397,7 +397,7 @@ router.post('/password-reset/confirm', async (req: Request, res: Response) => {
  * GET /api/auth/me
  * Get current user profile
  */
-router.get('/me', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/me', requireAuth, async (req: Request, res: Response) => {
   try {
     const requestId = req.headers['x-request-id'] as string;
 
@@ -405,12 +405,12 @@ router.get('/me', requireAuth, async (req: AuthenticatedRequest, res: Response) 
       success: true,
       data: {
         user: {
-          id: req.user.id,
-          email: req.user.email,
-          displayName: req.user.displayName,
-          createdAt: req.user.createdAt,
-          lastLoginAt: req.user.lastLoginAt,
-          preferences: req.user.preferences
+          id: req.user!.id,
+          email: req.user!.email,
+          displayName: req.user!.displayName,
+          createdAt: req.user!.createdAt,
+          lastLoginAt: req.user!.lastLoginAt,
+          preferences: req.user!.preferences
         }
       },
       timestamp: new Date().toISOString(),

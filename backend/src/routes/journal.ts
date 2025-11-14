@@ -13,7 +13,7 @@ const router = Router();
  * POST /api/journal
  * Save a new journey to the user's travel journal
  */
-router.post('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', requireAuth, async (req: Request, res: Response) => {
   try {
     const journeyData: SaveJourneyRequest = req.body;
     const requestId = req.headers['x-request-id'] as string;
@@ -30,7 +30,7 @@ router.post('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =
       });
     }
 
-    const journey = await JournalService.saveJourney(req.userId, journeyData);
+    const journey = await JournalService.saveJourney(req.userId!, journeyData);
 
     res.status(201).json({
       success: true,
@@ -71,7 +71,7 @@ router.post('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =
  * GET /api/journal
  * Retrieve user's journeys with filtering and pagination
  */
-router.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/', requireAuth, async (req: Request, res: Response) => {
   try {
     const query: JourneyListQuery = {
       page: req.query.page ? parseInt(req.query.page as string) : undefined,
@@ -89,7 +89,7 @@ router.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =>
     };
 
     const requestId = req.headers['x-request-id'] as string;
-    const result = await JournalService.getJourneys(req.userId, query);
+    const result = await JournalService.getJourneys(req.userId!, query);
 
     res.json({
       success: true,
@@ -117,10 +117,10 @@ router.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) =>
  * GET /api/journal/stats
  * Get user's journey statistics
  */
-router.get('/stats', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/stats', requireAuth, async (req: Request, res: Response) => {
   try {
     const requestId = req.headers['x-request-id'] as string;
-    const stats = await JournalService.getUserStats(req.userId);
+    const stats = await JournalService.getUserStats(req.userId!);
 
     res.json({
       success: true,
@@ -148,10 +148,10 @@ router.get('/stats', requireAuth, async (req: AuthenticatedRequest, res: Respons
  * GET /api/journal/tags
  * Get all unique tags for the user
  */
-router.get('/tags', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/tags', requireAuth, async (req: Request, res: Response) => {
   try {
     const requestId = req.headers['x-request-id'] as string;
-    const tags = await JournalService.getUserTags(req.userId);
+    const tags = await JournalService.getUserTags(req.userId!);
 
     res.json({
       success: true,
@@ -179,7 +179,7 @@ router.get('/tags', requireAuth, async (req: AuthenticatedRequest, res: Response
  * GET /api/journal/search
  * Search journeys by text
  */
-router.get('/search', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/search', requireAuth, async (req: Request, res: Response) => {
   try {
     const searchTerm = req.query.q as string;
     const page = req.query.page ? parseInt(req.query.page as string) : 1;
@@ -199,7 +199,7 @@ router.get('/search', requireAuth, async (req: AuthenticatedRequest, res: Respon
     }
 
     const offset = (page - 1) * limit;
-    const { journeys, total } = await JournalService.searchJourneys(req.userId, searchTerm, { limit, offset });
+    const { journeys, total } = await JournalService.searchJourneys(req.userId!, searchTerm, { limit, offset });
 
     res.json({
       success: true,
@@ -235,12 +235,12 @@ router.get('/search', requireAuth, async (req: AuthenticatedRequest, res: Respon
  * GET /api/journal/recent
  * Get recent journeys for the user
  */
-router.get('/recent', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/recent', requireAuth, async (req: Request, res: Response) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
     const requestId = req.headers['x-request-id'] as string;
 
-    const journeys = await JournalService.getRecentJourneys(req.userId, limit);
+    const journeys = await JournalService.getRecentJourneys(req.userId!, limit);
 
     res.json({
       success: true,
@@ -268,10 +268,10 @@ router.get('/recent', requireAuth, async (req: AuthenticatedRequest, res: Respon
  * GET /api/journal/export/all
  * Export all journeys for the user
  */
-router.get('/export/all', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/export/all', requireAuth, async (req: Request, res: Response) => {
   try {
     const requestId = req.headers['x-request-id'] as string;
-    const exportData = await JournalService.exportAllJourneys(req.userId);
+    const exportData = await JournalService.exportAllJourneys(req.userId!);
 
     // Set headers for file download
     res.setHeader('Content-Type', 'application/json');
@@ -303,7 +303,7 @@ router.get('/export/all', requireAuth, async (req: AuthenticatedRequest, res: Re
  * GET /api/journal/:id/export
  * Export a specific journey
  */
-router.get('/:id/export', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/:id/export', requireAuth, async (req: Request, res: Response) => {
   try {
     const journeyId = parseInt(req.params.id);
     const requestId = req.headers['x-request-id'] as string;
@@ -320,7 +320,7 @@ router.get('/:id/export', requireAuth, async (req: AuthenticatedRequest, res: Re
       });
     }
 
-    const exportData = await JournalService.exportJourney(journeyId, req.userId);
+    const exportData = await JournalService.exportJourney(journeyId, req.userId!);
 
     if (!exportData) {
       return res.status(404).json({
@@ -359,7 +359,7 @@ router.get('/:id/export', requireAuth, async (req: AuthenticatedRequest, res: Re
  * GET /api/journal/:id
  * Retrieve a specific journey by ID
  */
-router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const journeyId = parseInt(req.params.id);
     const requestId = req.headers['x-request-id'] as string;
@@ -376,7 +376,7 @@ router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
       });
     }
 
-    const journey = await JournalService.getJourney(journeyId, req.userId);
+    const journey = await JournalService.getJourney(journeyId, req.userId!);
 
     if (!journey) {
       return res.status(404).json({
@@ -416,7 +416,7 @@ router.get('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
  * PUT /api/journal/:id
  * Update an existing journey
  */
-router.put('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.put('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const journeyId = parseInt(req.params.id);
     const updateData: UpdateJourneyRequest = req.body;
@@ -434,7 +434,7 @@ router.put('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
       });
     }
 
-    const journey = await JournalService.updateJourney(journeyId, req.userId, updateData);
+    const journey = await JournalService.updateJourney(journeyId, req.userId!, updateData);
 
     if (!journey) {
       return res.status(404).json({
@@ -487,7 +487,7 @@ router.put('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response)
  * DELETE /api/journal/:id
  * Delete a journey
  */
-router.delete('/:id', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
   try {
     const journeyId = parseInt(req.params.id);
     const requestId = req.headers['x-request-id'] as string;
@@ -504,7 +504,7 @@ router.delete('/:id', requireAuth, async (req: AuthenticatedRequest, res: Respon
       });
     }
 
-    const deleted = await JournalService.deleteJourney(journeyId, req.userId);
+    const deleted = await JournalService.deleteJourney(journeyId, req.userId!);
 
     if (!deleted) {
       return res.status(404).json({

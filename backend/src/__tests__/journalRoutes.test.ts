@@ -162,12 +162,15 @@ describe('Journal Routes', () => {
 
     it('should return 400 for missing required fields', async () => {
       const journeyData = createTestJourneyData();
-      delete journeyData.name;
+      const journeyWithoutName = {
+        ...journeyData,
+        name: '',
+      };
 
       const response = await request(app)
         .post('/api/journal')
         .set('Authorization', `Bearer ${authToken}`)
-        .send(journeyData)
+        .send(journeyWithoutName)
         .expect(400);
 
       expect(response.body.error.code).toBe('MISSING_REQUIRED_FIELDS');
