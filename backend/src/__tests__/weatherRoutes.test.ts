@@ -9,6 +9,8 @@ vi.mock('../services/weatherService.js', () => ({
         getCurrentWeather: vi.fn(),
         getWeatherForLocationAndTime: vi.fn(),
         getRouteWeatherForecast: vi.fn(),
+        getRouteWeatherForecastWithInterpolation: vi.fn(),
+        getWeatherTimeline: vi.fn(),
         getCacheStats: vi.fn()
     },
     WeatherError: class WeatherError extends Error {
@@ -21,13 +23,14 @@ vi.mock('../services/weatherService.js', () => ({
 
 // Mock the error formatting utility
 vi.mock('@shared/utils/errorFormatting.js', () => ({
-    formatErrorResponse: (code: string, message: string, suggestions?: string[]) => ({
+    createErrorResponse: (code: string, message: string, suggestions?: string[]) => ({
         error: { code, message, suggestions, timestamp: expect.any(String) }
     })
 }));
 
 import { weatherService, WeatherError } from '../services/weatherService.js';
 import { WeatherCondition, PrecipitationType } from '@shared/types/weather.js';
+import { TravelMode } from '@shared/types/travel.js';
 
 const app = express();
 app.use(express.json());
@@ -49,7 +52,7 @@ describe('Weather Routes', () => {
                 coordinates: { latitude: 40.7128, longitude: -74.0060 },
                 address: 'New York, NY, USA'
             },
-            timestamp: '2023-12-25T12:00:00.000Z',
+            timestamp: new Date('2023-12-25T12:00:00.000Z'),
             temperature: {
                 current: 22,
                 feelsLike: 24,
@@ -86,11 +89,11 @@ describe('Weather Routes', () => {
                 });
 
             expect(response.status).toBe(200);
-            expect(response.body).toMatchObject({
-                success: true,
-                data: mockWeatherData,
-                timestamp: expect.any(String)
-            });
+            expect(response.body.success).toBe(true);
+            expect(response.body.data.location).toEqual(mockWeatherData.location);
+            expect(response.body.data.temperature).toEqual(mockWeatherData.temperature);
+            expect(response.body.data.conditions).toEqual(mockWeatherData.conditions);
+            expect(response.body.timestamp).toEqual(expect.any(String));
 
             expect(weatherService.getCurrentWeather).toHaveBeenCalledWith({
                 name: 'New York, NY',
@@ -168,7 +171,7 @@ describe('Weather Routes', () => {
                 name: 'Boston, MA',
                 coordinates: { latitude: 42.3601, longitude: -71.0589 }
             },
-            timestamp: '2023-12-26T12:00:00.000Z',
+            timestamp: new Date('2023-12-26T12:00:00.000Z'),
             temperature: {
                 current: 18,
                 feelsLike: 16,
@@ -205,11 +208,11 @@ describe('Weather Routes', () => {
                 });
 
             expect(response.status).toBe(200);
-            expect(response.body).toMatchObject({
-                success: true,
-                data: mockForecastData,
-                timestamp: expect.any(String)
-            });
+            expect(response.body.success).toBe(true);
+            expect(response.body.data.location).toEqual(mockForecastData.location);
+            expect(response.body.data.temperature).toEqual(mockForecastData.temperature);
+            expect(response.body.data.conditions).toEqual(mockForecastData.conditions);
+            expect(response.body.timestamp).toEqual(expect.any(String));
         });
 
         it('should return 400 for invalid timestamp', async () => {
@@ -233,7 +236,7 @@ describe('Weather Routes', () => {
                     name: 'Location 1',
                     coordinates: { latitude: 40.7128, longitude: -74.0060 }
                 },
-                timestamp: '2023-12-25T12:00:00.000Z',
+                timestamp: new Date('2023-12-25T12:00:00.000Z'),
                 temperature: { current: 22, feelsLike: 24, min: 18, max: 26 },
                 conditions: { main: WeatherCondition.SUNNY, description: 'clear sky', icon: '01d' },
                 precipitation: { type: PrecipitationType.NONE, probability: 0, intensity: 0 },
@@ -258,15 +261,12 @@ describe('Weather Routes', () => {
                 });
 
             expect(response.status).toBe(200);
-            expect(response.body).toMatchObject({
-                success: true,
-                data: mockRouteWeatherData,
-                timestamp: expect.any(String),
-                meta: {
-                    locationCount: 1,
-                    hasTimestamps: false
-                }
-            });
+            expect(response.body.success).toBe(true);
+            expect(response.body.data).toHaveLength(1);
+            expect(response.body.data[0].location).toEqual(mockRouteWeatherData[0].location);
+            expect(response.body.meta.locationCount).toBe(1);
+            expect(response.body.meta.hasTimestamps).toBe(false);
+            expect(response.body.timestamp).toEqual(expect.any(String));
         });
 
         it('should return 400 for missing locations', async () => {
@@ -360,6 +360,235 @@ describe('Weather Routes', () => {
                 service: 'weather',
                 status: 'unhealthy'
             });
+        });
+    });
+
+    describe('POST /api/weather/route-forecast', () => {
+        const mockRoute = {
+            id: 'test-route-1',
+            source: {
+                name: 'New York, NY',
+                coordinates: { latitude: 40.7128, longitude: -74.0060 }
+            },
+            destination: {
+                name: 'Boston, MA',
+                coordinates: { latitude: 42.3601, longitude: -71.0589 }
+            },
+            travelMode: 'driving',
+            totalDistance: 300,
+            estimatedDuration: 14400,
+            segments: [],
+            waypoints: [
+                {
+                    coordinates: { latitude: 40.7128, longitude: -74.0060 },
+                    distanceFromStart: 0,
+                    estimatedTimeFromStart: 0
+                },
+                {
+                    coordinates: { latitude: 42.3601, longitude: -71.0589 },
+                    distanceFromStart: 300,
+                    estimatedTimeFromStart: 14400
+                }
+            ]
+        };
+
+        const mockRouteWeatherForecast = {
+            waypoints: [
+                {
+                    waypoint: mockRoute.waypoints[0],
+                    weather: {
+                        forecast: {
+                            location: mockRoute.source,
+                            timestamp: new Date('2024-01-01T10:00:00Z'),
+                            temperature: { current: 22, feelsLike: 24, min: 18, max: 26 },
+                            conditions: { main: WeatherCondition.SUNNY, description: 'clear sky', icon: '01d' },
+                            precipitation: { type: PrecipitationType.NONE, probability: 0, intensity: 0 },
+                            wind: { speed: 5.2, direction: 180 },
+                            humidity: 65,
+                            visibility: 10
+                        },
+                        confidence: 1.0,
+                        interpolated: false
+                    },
+                    travelTime: new Date('2024-01-01T10:00:00Z')
+                }
+            ],
+            route: mockRoute,
+            startTime: new Date('2024-01-01T10:00:00Z'),
+            totalForecasts: 1,
+            missingDataPoints: 0,
+            warnings: []
+        };
+
+        it('should return comprehensive route weather forecast', async () => {
+            // Mock the new service method
+            vi.mocked(weatherService.getRouteWeatherForecastWithInterpolation).mockResolvedValueOnce(mockRouteWeatherForecast);
+
+            const response = await request(app)
+                .post('/api/weather/route-forecast')
+                .send({ 
+                    route: mockRoute,
+                    startTime: '2024-01-01T10:00:00Z',
+                    includeInterpolation: false
+                })
+                .expect(200);
+
+            expect(response.body.success).toBe(true);
+            expect(response.body.data).toHaveProperty('waypoints');
+            expect(response.body.data).toHaveProperty('route');
+            expect(response.body.data).toHaveProperty('warnings');
+            expect(response.body.meta.travelMode).toBe('driving');
+            expect(response.body.meta.interpolationEnabled).toBe(false);
+        });
+
+        it('should return 400 for missing route', async () => {
+            const response = await request(app)
+                .post('/api/weather/route-forecast')
+                .send({})
+                .expect(400);
+
+            expect(response.body.success).toBe(false);
+            expect(response.body.error.code).toBe('MISSING_ROUTE');
+        });
+
+        it('should return 400 for route without waypoints', async () => {
+            const invalidRoute = { ...mockRoute, waypoints: [] };
+
+            const response = await request(app)
+                .post('/api/weather/route-forecast')
+                .send({ route: invalidRoute })
+                .expect(400);
+
+            expect(response.body.success).toBe(false);
+            expect(response.body.error.code).toBe('INVALID_ROUTE');
+        });
+
+        it('should return 400 for incomplete route', async () => {
+            const incompleteRoute = { waypoints: mockRoute.waypoints }; // Missing source, destination, travelMode
+
+            const response = await request(app)
+                .post('/api/weather/route-forecast')
+                .send({ route: incompleteRoute })
+                .expect(400);
+
+            expect(response.body.success).toBe(false);
+            expect(response.body.error.code).toBe('INCOMPLETE_ROUTE');
+        });
+
+        it('should return 400 for invalid start time', async () => {
+            const response = await request(app)
+                .post('/api/weather/route-forecast')
+                .send({ 
+                    route: mockRoute,
+                    startTime: 'invalid-date'
+                })
+                .expect(400);
+
+            expect(response.body.success).toBe(false);
+            expect(response.body.error.code).toBe('INVALID_START_TIME');
+        });
+    });
+
+    describe('POST /api/weather/timeline', () => {
+        const mockRoute = {
+            id: 'test-route-1',
+            source: {
+                name: 'New York, NY',
+                coordinates: { latitude: 40.7128, longitude: -74.0060 }
+            },
+            destination: {
+                name: 'Boston, MA',
+                coordinates: { latitude: 42.3601, longitude: -71.0589 }
+            },
+            travelMode: 'driving',
+            totalDistance: 300,
+            estimatedDuration: 14400,
+            segments: [],
+            waypoints: [
+                {
+                    coordinates: { latitude: 40.7128, longitude: -74.0060 },
+                    distanceFromStart: 0,
+                    estimatedTimeFromStart: 0
+                },
+                {
+                    coordinates: { latitude: 42.3601, longitude: -71.0589 },
+                    distanceFromStart: 300,
+                    estimatedTimeFromStart: 14400
+                }
+            ]
+        };
+
+        const mockTimeline = [
+            {
+                time: new Date('2024-01-01T10:00:00Z'),
+                location: mockRoute.source,
+                weather: {
+                    location: mockRoute.source,
+                    timestamp: new Date('2024-01-01T10:00:00Z'),
+                    temperature: { current: 22, feelsLike: 24, min: 18, max: 26 },
+                    conditions: { main: WeatherCondition.SUNNY, description: 'clear sky', icon: '01d' },
+                    precipitation: { type: PrecipitationType.NONE, probability: 0, intensity: 0 },
+                    wind: { speed: 5.2, direction: 180 },
+                    humidity: 65,
+                    visibility: 10
+                },
+                distanceFromStart: 0,
+                estimatedProgress: 0
+            }
+        ];
+
+        it('should return weather timeline for route', async () => {
+            // Mock the new service method
+            vi.mocked(weatherService.getWeatherTimeline).mockResolvedValueOnce(mockTimeline);
+
+            const response = await request(app)
+                .post('/api/weather/timeline')
+                .send({ 
+                    route: mockRoute,
+                    startTime: '2024-01-01T10:00:00Z',
+                    timeIntervalMinutes: 60
+                })
+                .expect(200);
+
+            expect(response.body.success).toBe(true);
+            expect(response.body.data).toBeInstanceOf(Array);
+            expect(response.body.meta.timeInterval).toBe(60);
+            expect(response.body.meta.travelMode).toBe('driving');
+        });
+
+        it('should return 400 for missing route', async () => {
+            const response = await request(app)
+                .post('/api/weather/timeline')
+                .send({})
+                .expect(400);
+
+            expect(response.body.success).toBe(false);
+            expect(response.body.error.code).toBe('MISSING_ROUTE');
+        });
+
+        it('should return 400 for invalid time interval', async () => {
+            const response = await request(app)
+                .post('/api/weather/timeline')
+                .send({ 
+                    route: mockRoute,
+                    timeIntervalMinutes: 0 // Invalid interval
+                })
+                .expect(400);
+
+            expect(response.body.success).toBe(false);
+            expect(response.body.error.code).toBe('INVALID_TIME_INTERVAL');
+        });
+
+        it('should use default time interval when not specified', async () => {
+            vi.mocked(weatherService.getWeatherTimeline).mockResolvedValueOnce(mockTimeline);
+
+            const response = await request(app)
+                .post('/api/weather/timeline')
+                .send({ route: mockRoute })
+                .expect(200);
+
+            expect(response.body.success).toBe(true);
+            expect(response.body.meta.timeInterval).toBe(60); // Default 60 minutes
         });
     });
 });

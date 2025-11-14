@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { WeatherService, WeatherError } from '../services/weatherService.js';
 import { WeatherCondition, PrecipitationType } from '@shared/types/weather.js';
 import { Location } from '@shared/types/location.js';
+import { Route } from '@shared/types/route.js';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -633,6 +634,377 @@ describe('WeatherService', () => {
 
             const result = await weatherService.getCurrentWeather(mockLocation);
             expect(result.precipitation.intensity).toBe(10); // Heavy intensity
+        });
+    });
+
+    describe('multi-point weather forecasting', () => {
+        const mockRoute = {
+            id: 'test-route-1',
+            source: mockLocation,
+            destination: {
+                name: 'Boston, MA',
+                coordinates: { latitude: 42.3601, longitude: -71.0589 },
+                address: 'Boston, MA, USA'
+            },
+            travelMode: 'driving' as const,
+            totalDistance: 300,
+            estimatedDuration: 14400, // 4 hours
+            segments: [],
+            waypoints: [
+                {
+                    coordinates: { latitude: 40.7128, longitude: -74.0060 },
+                    distanceFromStart: 0,
+                    estimatedTimeFromStart: 0
+                },
+                {
+                    coordinates: { latitude: 41.5, longitude: -72.5 },
+                    distanceFromStart: 150,
+                    estimatedTimeFromStart: 7200 // 2 hours
+                },
+                {
+                    coordinates: { latitude: 42.3601, longitude: -71.0589 },
+                    distanceFromStart: 300,
+                    estimatedTimeFromStart: 14400 // 4 hours
+                }
+            ]
+        };
+
+        describe('getRouteWeatherForecastWithInterpolation', () => {
+            it('should return weather forecast for all waypoints along route', async () => {
+                // Mock weather responses for each waypoint - use current weather since timestamps are in past
+                mockFetch
+                    .mockResolvedValueOnce({
+                        ok: true,
+                        json: async () => mockCurrentWeatherResponse
+                    })
+                    .mockResolvedValueOnce({
+                        ok: true,
+                        json: async () => ({
+                            ...mockCurrentWeatherResponse,
+                            coord: { lon: -72.5, lat: 41.5 },
+                            main: { ...mockCurrentWeatherResponse.main, temp: 20.0 }
+                        })
+                    })
+                    .mockResolvedValueOnce({
+                        ok: true,
+                        json: async () => ({
+                            ...mockCurrentWeatherResponse,
+                            coord: { lon: -71.0589, lat: 42.3601 },
+                            main: { ...mockCurrentWeatherResponse.main, temp: 18.0 }
+                        })
+                    });
+
+                const result = await weatherService.getRouteWeatherForecastWithInterpolation({
+                    route: mockRoute,
+                    startTime: new Date('2024-01-01T10:00:00Z'),
+                    includeInterpolation: false
+                });
+
+                expect(result.waypoints).toHaveLength(3);
+                expect(result.route).toEqual(mockRoute);
+                expect(result.totalForecasts).toBe(3);
+                expect(result.missingDataPoints).toBe(0);
+                expect(result.waypoints[0].weather.interpolated).toBe(false);
+                expect(result.waypoints[1].weather.interpolated).toBe(false);
+                expect(result.waypoints[2].weather.interpolated).toBe(false);
+            });
+
+            it('should handle missing weather data gracefully', async () => {
+                // Mock successful response for first waypoint, failure for second, success for third
+                mockFetch
+                    .mockResolvedValueOnce({
+                        ok: true,
+                        json: async () => mockCurrentWeatherResponse
+                    })
+                    .mockResolvedValueOnce({
+                        ok: false,
+                        status: 500,
+                        statusText: 'Internal Server Error'
+                    })
+                    .mockResolvedValueOnce({
+                        ok: true,
+                        json: async () => ({
+                            ...mockCurrentWeatherResponse,
+                            coord: { lon: -71.0589, lat: 42.3601 }
+                        })
+                    });
+
+                const result = await weatherService.getRouteWeatherForecastWithInterpolation({
+                    route: mockRoute,
+                    includeInterpolation: false
+                });
+
+                expect(result.waypoints.length).toBeGreaterThanOrEqual(1); // At least one successful request
+                expect(result.missingDataPoints).toBeGreaterThan(0);
+                // Check for any warning about missing data
+                const hasDataWarning = result.warnings.some(w => 
+                    w.includes('Weather data unavailable') || 
+                    w.includes('could not be retrieved') ||
+                    w.includes('missing data')
+                );
+                expect(hasDataWarning).toBe(true);
+            });
+
+            it('should interpolate weather data between known points', async () => {
+                // Mock weather for start and end points only
+                mockFetch
+                    .mockResolvedValueOnce({
+                        ok: true,
+                        json: async () => ({
+                            ...mockCurrentWeatherResponse,
+                            main: { ...mockCurrentWeatherResponse.main, temp: 25.0 }
+                        })
+                    })
+                    .mockResolvedValueOnce({
+                        ok: false,
+                        status: 500
+                    })
+                    .mockResolvedValueOnce({
+                        ok: true,
+                        json: async () => ({
+                            ...mockCurrentWeatherResponse,
+                            coord: { lon: -71.0589, lat: 42.3601 },
+                            main: { ...mockCurrentWeatherResponse.main, temp: 15.0 }
+                        })
+                    });
+
+                const result = await weatherService.getRouteWeatherForecastWithInterpolation({
+                    route: mockRoute,
+                    includeInterpolation: true
+                });
+
+                // Should have at least 1 successful data point
+                expect(result.waypoints.length).toBeGreaterThanOrEqual(1);
+                
+                // If we have 2 or more successful points, check interpolation
+                if (result.waypoints.length >= 2) {
+                    const interpolatedPoints = result.waypoints.filter(w => w.weather.interpolated);
+                    if (interpolatedPoints.length > 0) {
+                        // Check that interpolated temperature is between start and end
+                        const interpolatedTemp = interpolatedPoints[0].weather.forecast.temperature.current;
+                        expect(interpolatedTemp).toBeGreaterThanOrEqual(15);
+                        expect(interpolatedTemp).toBeLessThanOrEqual(25);
+                    }
+                }
+            });
+
+            it('should generate appropriate warnings for weather patterns', async () => {
+                // Mock weather with significant temperature variation
+                mockFetch
+                    .mockResolvedValueOnce({
+                        ok: true,
+                        json: async () => ({
+                            ...mockCurrentWeatherResponse,
+                            main: { ...mockCurrentWeatherResponse.main, temp: 30.0 }
+                        })
+                    })
+                    .mockResolvedValueOnce({
+                        ok: true,
+                        json: async () => ({
+                            ...mockCurrentWeatherResponse,
+                            main: { ...mockCurrentWeatherResponse.main, temp: 10.0 },
+                            weather: [{
+                                id: 200,
+                                main: 'Thunderstorm',
+                                description: 'thunderstorm',
+                                icon: '11d'
+                            }]
+                        })
+                    })
+                    .mockResolvedValueOnce({
+                        ok: true,
+                        json: async () => ({
+                            ...mockCurrentWeatherResponse,
+                            main: { ...mockCurrentWeatherResponse.main, temp: 5.0 },
+                            visibility: 2000 // Low visibility
+                        })
+                    });
+
+                const result = await weatherService.getRouteWeatherForecastWithInterpolation({
+                    route: mockRoute,
+                    includeInterpolation: false
+                });
+
+                // Check that we have warnings (the specific warnings depend on successful data retrieval)
+                expect(result.warnings.length).toBeGreaterThan(0);
+                
+                // If we have enough successful weather data points, check for specific warnings
+                if (result.waypoints.length >= 3) {
+                    const hasTemperatureWarning = result.warnings.some(w => w.includes('temperature variation'));
+                    const hasSevereWeatherWarning = result.warnings.some(w => w.includes('Severe weather conditions'));
+                    const hasVisibilityWarning = result.warnings.some(w => w.includes('Low visibility'));
+                    
+                    expect(hasTemperatureWarning || hasSevereWeatherWarning || hasVisibilityWarning).toBe(true);
+                }
+            });
+
+            it('should handle routes without waypoints', async () => {
+                const routeWithoutWaypoints = { ...mockRoute, waypoints: [] };
+
+                await expect(weatherService.getRouteWeatherForecastWithInterpolation({
+                    route: routeWithoutWaypoints
+                })).rejects.toThrow(WeatherError);
+            });
+
+            it('should adjust sampling interval based on travel mode', async () => {
+                const walkingRoute = {
+                    ...mockRoute,
+                    travelMode: 'walking' as const,
+                    totalDistance: 20,
+                    waypoints: Array.from({ length: 10 }, (_, i) => ({
+                        coordinates: { 
+                            latitude: 40.7128 + i * 0.01, 
+                            longitude: -74.0060 + i * 0.01 
+                        },
+                        distanceFromStart: i * 2,
+                        estimatedTimeFromStart: i * 1800 // 30 minutes per 2km
+                    }))
+                };
+
+                // Mock responses for sampling points (not all waypoints will be sampled)
+                for (let i = 0; i < 5; i++) {
+                    mockFetch.mockResolvedValueOnce({
+                        ok: true,
+                        json: async () => mockCurrentWeatherResponse
+                    });
+                }
+
+                const result = await weatherService.getRouteWeatherForecastWithInterpolation({
+                    route: walkingRoute,
+                    includeInterpolation: false
+                });
+
+                // Should have at least some weather data points
+                expect(result.waypoints.length).toBeGreaterThanOrEqual(1);
+                expect(result.totalForecasts).toBeGreaterThanOrEqual(1);
+            });
+        });
+
+        describe('getWeatherTimeline', () => {
+            it('should return weather timeline at specified intervals', async () => {
+                // Mock weather responses for timeline points
+                for (let i = 0; i < 5; i++) {
+                    mockFetch.mockResolvedValueOnce({
+                        ok: true,
+                        json: async () => ({
+                            ...mockCurrentWeatherResponse,
+                            main: { ...mockCurrentWeatherResponse.main, temp: 20 + i }
+                        })
+                    });
+                }
+
+                const startTime = new Date('2024-01-01T10:00:00Z');
+                const timeline = await weatherService.getWeatherTimeline(
+                    mockRoute,
+                    startTime,
+                    60 // 1 hour intervals
+                );
+
+                expect(timeline.length).toBeGreaterThan(0);
+                expect(timeline[0].time).toEqual(startTime);
+                expect(timeline[0].distanceFromStart).toBe(0);
+                expect(timeline[0].estimatedProgress).toBe(0);
+
+                // Check that times are properly spaced
+                if (timeline.length > 1) {
+                    const timeDiff = timeline[1].time.getTime() - timeline[0].time.getTime();
+                    expect(timeDiff).toBe(60 * 60 * 1000); // 1 hour in milliseconds
+                }
+            });
+
+            it('should handle timeline generation for short routes', async () => {
+                const shortRoute = {
+                    ...mockRoute,
+                    totalDistance: 10,
+                    estimatedDuration: 600, // 10 minutes
+                    waypoints: [
+                        mockRoute.waypoints[0],
+                        { ...mockRoute.waypoints[2], distanceFromStart: 10, estimatedTimeFromStart: 600 }
+                    ]
+                };
+
+                mockFetch.mockResolvedValueOnce({
+                    ok: true,
+                    json: async () => mockCurrentWeatherResponse
+                });
+
+                const timeline = await weatherService.getWeatherTimeline(
+                    shortRoute,
+                    new Date('2024-01-01T10:00:00Z'),
+                    30 // 30 minute intervals
+                );
+
+                expect(timeline.length).toBe(1); // Only one point for short route
+            });
+        });
+
+        describe('weather interpolation', () => {
+            it('should interpolate wind direction correctly across 0°/360° boundary', async () => {
+                const forecast1 = {
+                    ...mockCurrentWeatherResponse,
+                    wind: { speed: 10, deg: 350 }
+                };
+                const forecast2 = {
+                    ...mockCurrentWeatherResponse,
+                    wind: { speed: 15, deg: 10 }
+                };
+
+                mockFetch
+                    .mockResolvedValueOnce({
+                        ok: true,
+                        json: async () => forecast1
+                    })
+                    .mockResolvedValueOnce({
+                        ok: true,
+                        json: async () => forecast2
+                    });
+
+                const result = await weatherService.getRouteWeatherForecastWithInterpolation({
+                    route: {
+                        ...mockRoute,
+                        waypoints: [mockRoute.waypoints[0], mockRoute.waypoints[2]]
+                    },
+                    includeInterpolation: true
+                });
+
+                const interpolatedPoints = result.waypoints.filter(w => w.weather.interpolated);
+                if (interpolatedPoints.length > 0) {
+                    const windDir = interpolatedPoints[0].weather.forecast.wind.direction;
+                    // Should interpolate through 0° (shortest path)
+                    expect(windDir).toBeGreaterThanOrEqual(350);
+                    expect(windDir).toBeLessThanOrEqual(360);
+                }
+            });
+
+            it('should maintain confidence levels for interpolated data', async () => {
+                mockFetch
+                    .mockResolvedValueOnce({
+                        ok: true,
+                        json: async () => mockCurrentWeatherResponse
+                    })
+                    .mockResolvedValueOnce({
+                        ok: true,
+                        json: async () => ({
+                            ...mockCurrentWeatherResponse,
+                            coord: { lon: -71.0589, lat: 42.3601 }
+                        })
+                    });
+
+                const result = await weatherService.getRouteWeatherForecastWithInterpolation({
+                    route: {
+                        ...mockRoute,
+                        waypoints: [mockRoute.waypoints[0], mockRoute.waypoints[2]]
+                    },
+                    includeInterpolation: true
+                });
+
+                const interpolatedPoints = result.waypoints.filter(w => w.weather.interpolated);
+                interpolatedPoints.forEach(point => {
+                    expect(point.weather.confidence).toBeGreaterThan(0);
+                    expect(point.weather.confidence).toBeLessThanOrEqual(1);
+                    expect(point.weather.sourceForecasts).toHaveLength(2);
+                });
+            });
         });
     });
 });

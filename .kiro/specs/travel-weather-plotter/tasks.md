@@ -69,7 +69,7 @@
   - Add timeline calculation for weather forecast alignment
   - _Requirements: 2.1, 2.2, 2.3, 2.4_
 
-- [ ] 5. Implement weather service integration
+- [x] 5. Implement weather service integration
 - [x] 5.1 Create weather API service with comprehensive data retrieval
   - Implement weather service class with external API integration
   - Write functions to retrieve detailed weather data including temperature, humidity, wind, visibility
@@ -77,7 +77,7 @@
   - Implement weather data normalization and formatting
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.6_
 
-- [ ] 5.2 Implement multi-point weather forecasting along routes
+- [x] 5.2 Implement multi-point weather forecasting along routes
   - Create functions to retrieve weather forecasts for multiple route waypoints
   - Write weather interpolation logic for smooth transitions between points
   - Implement time-based weather forecast alignment with travel timeline
