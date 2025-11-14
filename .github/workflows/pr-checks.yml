@@ -8,6 +8,7 @@ jobs:
   validate-pr:
     runs-on: ubuntu-latest
     permissions:
+      contents: write
       issues: write
     
     steps:
