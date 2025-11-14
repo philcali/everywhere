@@ -159,7 +159,7 @@ export class WeatherService {
         this.apiKey = options.apiKey || process.env.WEATHER_API_KEY || '';
         this.units = options.units || 'metric';
         this.language = options.language || 'en';
-        
+
         if (!this.apiKey) {
             console.warn('⚠️  Weather API key not provided. Service will use mock data.');
         }
@@ -170,7 +170,7 @@ export class WeatherService {
      */
     async getCurrentWeather(location: Location): Promise<WeatherForecast> {
         const cacheKey = this.generateCacheKey(location, 'current');
-        
+
         // Check cache first
         const cachedResult = this.getCachedResult(cacheKey);
         if (cachedResult) {
@@ -184,10 +184,10 @@ export class WeatherService {
             }
 
             const forecast = await this.makeCurrentWeatherRequest(location);
-            
+
             // Cache the result
             this.cacheResult(cacheKey, forecast);
-            
+
             return forecast;
         } catch (error) {
             if (error instanceof WeatherError) {
@@ -225,7 +225,7 @@ export class WeatherService {
         for (let i = 0; i < locations.length; i += batchSize) {
             const batch = locations.slice(i, i + batchSize);
             const batchTimestamps = timestamps?.slice(i, i + batchSize);
-            
+
             const batchPromises = batch.map(async (location, index) => {
                 const timestamp = batchTimestamps?.[index];
                 return this.getWeatherForLocationAndTime(location, timestamp);
@@ -249,7 +249,7 @@ export class WeatherService {
     async getWeatherForLocationAndTime(location: Location, timestamp?: Date): Promise<WeatherForecast> {
         const targetTime = timestamp || new Date();
         const now = new Date();
-        
+
         // If timestamp is current or very recent, get current weather
         if (Math.abs(targetTime.getTime() - now.getTime()) < 30 * 60 * 1000) { // Within 30 minutes
             return this.getCurrentWeather(location);
@@ -271,7 +271,7 @@ export class WeatherService {
      */
     async getForecastWeather(location: Location, timestamp: Date): Promise<WeatherForecast> {
         const cacheKey = this.generateCacheKey(location, 'forecast', timestamp);
-        
+
         // Check cache first
         const cachedResult = this.getCachedResult(cacheKey);
         if (cachedResult) {
@@ -284,10 +284,10 @@ export class WeatherService {
             }
 
             const forecast = await this.makeForecastWeatherRequest(location, timestamp);
-            
+
             // Cache the result
             this.cacheResult(cacheKey, forecast);
-            
+
             return forecast;
         } catch (error) {
             if (error instanceof WeatherError) {
@@ -312,7 +312,7 @@ export class WeatherService {
      */
     async getRouteWeatherForecastWithInterpolation(query: RouteWeatherQuery): Promise<RouteWeatherForecast> {
         const { route, startTime = new Date(), intervalKm, includeInterpolation = true } = query;
-        
+
         if (!route.waypoints || route.waypoints.length === 0) {
             throw this.createWeatherError(
                 'INVALID_ROUTE',
@@ -330,7 +330,7 @@ export class WeatherService {
 
         // Determine which waypoints to sample for weather
         const samplingWaypoints = this.selectWeatherSamplingPoints(route, intervalKm);
-        
+
         // Get weather data for sampling points
         const weatherPromises = samplingWaypoints.map(async (waypoint) => {
             const travelTime = new Date(startTime.getTime() + waypoint.estimatedTimeFromStart * 1000);
@@ -430,7 +430,7 @@ export class WeatherService {
         // Interpolate weather for all route waypoints
         for (const waypoint of route.waypoints) {
             // Skip if we already have weather data for this point
-            if (knownWeatherPoints.some(kp => 
+            if (knownWeatherPoints.some(kp =>
                 Math.abs(kp.waypoint.distanceFromStart - waypoint.distanceFromStart) < 0.1
             )) {
                 continue;
@@ -607,23 +607,23 @@ export class WeatherService {
     private interpolateWindDirection(dir1: number, dir2: number, weight: number): number {
         // Handle circular interpolation for wind direction
         let diff = dir2 - dir1;
-        
+
         // Choose the shorter path around the circle
         if (diff > 180) {
             diff -= 360;
         } else if (diff < -180) {
             diff += 360;
         }
-        
+
         let result = dir1 + diff * weight;
-        
+
         // Normalize to 0-360 range
         if (result < 0) {
             result += 360;
         } else if (result >= 360) {
             result -= 360;
         }
-        
+
         return Math.round(result);
     }
 
@@ -665,7 +665,7 @@ export class WeatherService {
     private getDefaultWeatherSamplingInterval(route: Route): number {
         // Adjust sampling interval based on route length and travel mode
         const baseInterval = route.totalDistance < 100 ? 25 : 50; // km
-        
+
         // More frequent sampling for slower travel modes
         switch (route.travelMode) {
             case 'walking':
@@ -713,12 +713,12 @@ export class WeatherService {
         }
 
         // Check for severe weather conditions
-        const severeConditions = waypointWeatherData.filter(w => 
+        const severeConditions = waypointWeatherData.filter(w =>
             w.weather.forecast.conditions.main === WeatherCondition.STORMY ||
             w.weather.forecast.precipitation.intensity >= 7 ||
             w.weather.forecast.wind.speed > 50
         );
-        
+
         if (severeConditions.length > 0) {
             warnings.push(`Severe weather conditions detected at ${severeConditions.length} points along route`);
         }
@@ -766,11 +766,11 @@ export class WeatherService {
             const timeOffset = i * timeIntervalMinutes * 60 * 1000; // Convert to milliseconds
             const currentTime = new Date(startTime.getTime() + timeOffset);
             const progress = Math.min(i * timeIntervalMinutes * 60, route.estimatedDuration) / route.estimatedDuration;
-            
+
             // Find the corresponding waypoint for this time
             const targetTimeSeconds = i * timeIntervalMinutes * 60;
             const waypoint = this.findWaypointAtTime(route.waypoints, targetTimeSeconds);
-            
+
             if (waypoint) {
                 const location: Location = {
                     name: `Route position at ${currentTime.toISOString()}`,
@@ -837,7 +837,7 @@ export class WeatherService {
         let afterWaypoint: Waypoint | null = null;
 
         for (let i = 0; i < waypoints.length - 1; i++) {
-            if (waypoints[i].estimatedTimeFromStart <= targetTimeSeconds && 
+            if (waypoints[i].estimatedTimeFromStart <= targetTimeSeconds &&
                 waypoints[i + 1].estimatedTimeFromStart >= targetTimeSeconds) {
                 beforeWaypoint = waypoints[i];
                 afterWaypoint = waypoints[i + 1];
@@ -860,12 +860,12 @@ export class WeatherService {
 
         return {
             coordinates: {
-                latitude: beforeWaypoint.coordinates.latitude + 
+                latitude: beforeWaypoint.coordinates.latitude +
                     (afterWaypoint.coordinates.latitude - beforeWaypoint.coordinates.latitude) * timeProgress,
-                longitude: beforeWaypoint.coordinates.longitude + 
+                longitude: beforeWaypoint.coordinates.longitude +
                     (afterWaypoint.coordinates.longitude - beforeWaypoint.coordinates.longitude) * timeProgress
             },
-            distanceFromStart: beforeWaypoint.distanceFromStart + 
+            distanceFromStart: beforeWaypoint.distanceFromStart +
                 (afterWaypoint.distanceFromStart - beforeWaypoint.distanceFromStart) * timeProgress,
             estimatedTimeFromStart: targetTimeSeconds
         };
@@ -1144,7 +1144,7 @@ export class WeatherService {
         if (snow && (snow['1h'] > 0 || snow['3h'] > 0)) {
             return PrecipitationType.SNOW;
         }
-        
+
         if (rain && (rain['1h'] > 0 || rain['3h'] > 0)) {
             return PrecipitationType.RAIN;
         }
