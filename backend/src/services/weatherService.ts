@@ -1187,9 +1187,17 @@ export class WeatherService {
     }
 
     private getMockWeatherForecast(location: Location, timestamp?: Date): WeatherForecast {
-        // Generate mock weather data for development
+        // Generate deterministic mock weather data for development
         const now = timestamp || new Date();
-        const temp = 15 + Math.random() * 20; // Random temp between 15-35°C
+        
+        // Use location coordinates and timestamp to create deterministic "random" values
+        const seed = Math.abs(location.coordinates.latitude * 1000 + location.coordinates.longitude * 1000 + (timestamp ? timestamp.getTime() / 1000000 : 0));
+        const pseudoRandom = (seed: number, index: number) => {
+            const x = Math.sin(seed + index) * 10000;
+            return x - Math.floor(x);
+        };
+
+        const temp = 15 + pseudoRandom(seed, 1) * 20; // Temp between 15-35°C
         const conditions = [
             WeatherCondition.SUNNY,
             WeatherCondition.CLOUDY,
@@ -1203,14 +1211,14 @@ export class WeatherService {
             PrecipitationType.NONE
         ];
 
-        const conditionIndex = Math.floor(Math.random() * conditions.length);
+        const conditionIndex = Math.floor(pseudoRandom(seed, 2) * conditions.length);
 
         return {
             location,
             timestamp: now,
             temperature: {
                 current: Math.round(temp),
-                feelsLike: Math.round(temp + (Math.random() - 0.5) * 4),
+                feelsLike: Math.round(temp + (pseudoRandom(seed, 3) - 0.5) * 4),
                 min: Math.round(temp - 5),
                 max: Math.round(temp + 5)
             },
@@ -1221,15 +1229,15 @@ export class WeatherService {
             },
             precipitation: {
                 type: precipTypes[conditionIndex],
-                probability: precipTypes[conditionIndex] === PrecipitationType.NONE ? 0 : Math.round(Math.random() * 100),
-                intensity: precipTypes[conditionIndex] === PrecipitationType.NONE ? 0 : Math.round(Math.random() * 5) + 1
+                probability: precipTypes[conditionIndex] === PrecipitationType.NONE ? 0 : Math.round(pseudoRandom(seed, 4) * 100),
+                intensity: precipTypes[conditionIndex] === PrecipitationType.NONE ? 0 : Math.round(pseudoRandom(seed, 5) * 5) + 1
             },
             wind: {
-                speed: Math.round(Math.random() * 20 * 10) / 10,
-                direction: Math.round(Math.random() * 360)
+                speed: Math.round(pseudoRandom(seed, 6) * 20 * 10) / 10,
+                direction: Math.round(pseudoRandom(seed, 7) * 360)
             },
-            humidity: Math.round(30 + Math.random() * 60),
-            visibility: Math.round(5 + Math.random() * 15)
+            humidity: Math.round(30 + pseudoRandom(seed, 8) * 60),
+            visibility: Math.round(5 + pseudoRandom(seed, 9) * 15)
         };
     }
 

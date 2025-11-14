@@ -251,39 +251,51 @@ router.post('/route-forecast', async (req: Request, res: Response) => {
         const { route, startTime, intervalKm, includeInterpolation } = req.body;
 
         if (!route) {
-            return res.status(400).json(createErrorResponse(
-                'MISSING_ROUTE',
-                'Route object is required',
-                ['Provide a route object with waypoints', 'Route must include source, destination, and waypoints']
-            ));
+            return res.status(400).json({
+                success: false,
+                error: {
+                    code: 'MISSING_ROUTE',
+                    message: 'Route object is required',
+                    suggestions: ['Provide a route object with waypoints', 'Route must include source, destination, and waypoints']
+                }
+            });
         }
 
         if (!route.waypoints || !Array.isArray(route.waypoints) || route.waypoints.length === 0) {
-            return res.status(400).json(createErrorResponse(
-                'INVALID_ROUTE',
-                'Route must contain waypoints',
-                ['Ensure route has waypoints array with at least one waypoint', 'Each waypoint should have coordinates and timing information']
-            ));
+            return res.status(400).json({
+                success: false,
+                error: {
+                    code: 'INVALID_ROUTE',
+                    message: 'Route must contain waypoints',
+                    suggestions: ['Ensure route has waypoints array with at least one waypoint', 'Each waypoint should have coordinates and timing information']
+                }
+            });
         }
 
         // Validate route structure
         if (!route.source || !route.destination || !route.travelMode) {
-            return res.status(400).json(createErrorResponse(
-                'INCOMPLETE_ROUTE',
-                'Route must include source, destination, and travelMode',
-                ['Provide complete route information', 'Include source and destination locations', 'Specify travel mode']
-            ));
+            return res.status(400).json({
+                success: false,
+                error: {
+                    code: 'INCOMPLETE_ROUTE',
+                    message: 'Route must include source, destination, and travelMode',
+                    suggestions: ['Provide complete route information', 'Include source and destination locations', 'Specify travel mode']
+                }
+            });
         }
 
         let parsedStartTime: Date | undefined;
         if (startTime) {
             parsedStartTime = new Date(startTime);
             if (isNaN(parsedStartTime.getTime())) {
-                return res.status(400).json(createErrorResponse(
-                    'INVALID_START_TIME',
-                    'Invalid start time format',
-                    ['Use ISO 8601 format: YYYY-MM-DDTHH:mm:ss.sssZ']
-                ));
+                return res.status(400).json({
+                    success: false,
+                    error: {
+                        code: 'INVALID_START_TIME',
+                        message: 'Invalid start time format',
+                        suggestions: ['Use ISO 8601 format: YYYY-MM-DDTHH:mm:ss.sssZ']
+                    }
+                });
             }
         }
 
@@ -336,19 +348,25 @@ router.post('/timeline', async (req: Request, res: Response) => {
         const { route, startTime, timeIntervalMinutes } = req.body;
 
         if (!route) {
-            return res.status(400).json(createErrorResponse(
-                'MISSING_ROUTE',
-                'Route object is required',
-                ['Provide a route object with waypoints and timing information']
-            ));
+            return res.status(400).json({
+                success: false,
+                error: {
+                    code: 'MISSING_ROUTE',
+                    message: 'Route object is required',
+                    suggestions: ['Provide a route object with waypoints and timing information']
+                }
+            });
         }
 
         if (!route.waypoints || !Array.isArray(route.waypoints) || route.waypoints.length === 0) {
-            return res.status(400).json(createErrorResponse(
-                'INVALID_ROUTE',
-                'Route must contain waypoints',
-                ['Ensure route has waypoints array with timing information']
-            ));
+            return res.status(400).json({
+                success: false,
+                error: {
+                    code: 'INVALID_ROUTE',
+                    message: 'Route must contain waypoints',
+                    suggestions: ['Ensure route has waypoints array with timing information']
+                }
+            });
         }
 
         let parsedStartTime = new Date();
@@ -363,13 +381,16 @@ router.post('/timeline', async (req: Request, res: Response) => {
             }
         }
 
-        const interval = timeIntervalMinutes ? parseInt(timeIntervalMinutes) : 60;
+        const interval = timeIntervalMinutes !== undefined ? parseInt(timeIntervalMinutes) : 60;
         if (interval <= 0 || interval > 1440) { // Max 24 hours
-            return res.status(400).json(createErrorResponse(
-                'INVALID_TIME_INTERVAL',
-                'Time interval must be between 1 and 1440 minutes',
-                ['Provide a reasonable time interval', 'Default is 60 minutes (1 hour)']
-            ));
+            return res.status(400).json({
+                success: false,
+                error: {
+                    code: 'INVALID_TIME_INTERVAL',
+                    message: 'Time interval must be between 1 and 1440 minutes',
+                    suggestions: ['Provide a reasonable time interval', 'Default is 60 minutes (1 hour)']
+                }
+            });
         }
 
         const timeline = await weatherService.getWeatherTimeline(route, parsedStartTime, interval);

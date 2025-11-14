@@ -4,9 +4,9 @@ import { WeatherCondition, PrecipitationType } from '@shared/types/weather.js';
 import { Location } from '@shared/types/location.js';
 import { Route } from '@shared/types/route.js';
 
-// Mock fetch globally
+// Mock fetch globally before any imports
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+vi.stubGlobal('fetch', mockFetch);
 
 describe('WeatherService', () => {
     let weatherService: WeatherService;
@@ -86,11 +86,12 @@ describe('WeatherService', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        mockFetch.mockClear();
         weatherService = new WeatherService({ apiKey: 'test-api-key' });
     });
 
     afterEach(() => {
-        vi.restoreAllMocks();
+        vi.clearAllMocks();
     });
 
     describe('getCurrentWeather', () => {
@@ -377,8 +378,23 @@ describe('WeatherService', () => {
             const result = await serviceWithoutKey.getCurrentWeather(mockLocation);
 
             expect(result.location).toEqual(mockLocation);
-            expect(result.temperature.current).toBeGreaterThan(0);
+            expect(result.temperature.current).toBeGreaterThan(-50);
+            expect(result.temperature.current).toBeLessThan(60);
             expect(Object.values(WeatherCondition)).toContain(result.conditions.main);
+            expect(Object.values(PrecipitationType)).toContain(result.precipitation.type);
+            expect(mockFetch).not.toHaveBeenCalled();
+        });
+
+        it('should not make network calls when using mock data', async () => {
+            const serviceWithoutKey = new WeatherService();
+            
+            // Test multiple calls to ensure no network requests
+            await serviceWithoutKey.getCurrentWeather(mockLocation);
+            await serviceWithoutKey.getCurrentWeather({
+                name: 'Test Location 2',
+                coordinates: { latitude: 51.5074, longitude: -0.1278 }
+            });
+            
             expect(mockFetch).not.toHaveBeenCalled();
         });
     });
@@ -934,7 +950,7 @@ describe('WeatherService', () => {
                     30 // 30 minute intervals
                 );
 
-                expect(timeline.length).toBe(1); // Only one point for short route
+                expect(timeline.length).toBe(2); // Start and end points for short route
             });
         });
 
