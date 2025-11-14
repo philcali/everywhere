@@ -1,0 +1,47 @@
+# ==============================================
+# Travel Weather Plotter - Development Dockerfile
+# ==============================================
+
+FROM node:22-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    sqlite \
+    git \
+    && ln -sf python3 /usr/bin/python
+
+# Copy package files
+COPY package*.json ./
+COPY shared/package*.json ./shared/
+COPY backend/package*.json ./backend/
+COPY frontend/package*.json ./frontend/
+
+# Install dependencies
+RUN npm ci
+RUN cd shared && npm ci
+RUN cd backend && npm ci
+RUN cd frontend && npm ci
+
+# Copy source code
+COPY . .
+
+# Create data directory
+RUN mkdir -p /app/data
+
+# Create uploads directory
+RUN mkdir -p /app/uploads
+
+# Expose ports
+EXPOSE 3001 5173
+
+# Set development environment
+ENV NODE_ENV=development
+
+# Start development servers
+CMD ["npm", "run", "dev"]
