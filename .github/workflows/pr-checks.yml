@@ -85,20 +85,20 @@ jobs:
             
             const body = `## Build Status: ${status}
             
-- Frontend changes: ${frontendChanges} files
-- Backend changes: ${backendChanges} files  
-- Shared changes: ${sharedChanges} files
+            - Frontend changes: ${frontendChanges} files
+            - Backend changes: ${backendChanges} files  
+            - Shared changes: ${sharedChanges} files
 
-Build completed at: ${new Date().toISOString()}
+            Build completed at: ${new Date().toISOString()}
 
-<details>
-<summary>Workflow Details</summary>
+            <details>
+            <summary>Workflow Details</summary>
 
-- **Workflow**: ${context.workflow}
-- **Run ID**: ${context.runId}
-- **Commit**: ${context.sha.substring(0, 7)}
+            - **Workflow**: ${context.workflow}
+            - **Run ID**: ${context.runId}
+            - **Commit**: ${context.sha.substring(0, 7)}
 
-</details>`;
+            </details>`;
             
             if (botComment) {
               await github.rest.issues.updateComment({
