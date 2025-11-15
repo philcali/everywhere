@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Layout, Container, Grid } from './components/layout';
 import { TravelPlannerForm } from './components/input';
+import { AuthProvider } from './components/auth';
 
 function App() {
   const [showForm, setShowForm] = useState(false);
@@ -22,7 +23,8 @@ function App() {
   };
 
   return (
-    <Layout>
+    <AuthProvider>
+      <Layout>
       <Container className="py-8 sm:py-12">
         {!showForm ? (
           <>
@@ -112,6 +114,7 @@ function App() {
         )}
       </Container>
     </Layout>
+    </AuthProvider>
   );
 }
 

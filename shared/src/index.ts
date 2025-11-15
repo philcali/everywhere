@@ -15,6 +15,22 @@ export type { WeatherForecast } from './types/weather.js';
 // API types
 export type { ErrorResponse, ApiResponse } from './types/api.js';
 
+// Auth types
+export type { 
+  User, 
+  UserPreferences, 
+  AuthToken, 
+  LoginRequest, 
+  RegisterRequest, 
+  LoginResponse, 
+  RegisterResponse, 
+  PasswordResetRequest, 
+  PasswordResetConfirm, 
+  UpdateProfileRequest, 
+  ChangePasswordRequest, 
+  AuthState 
+} from './types/auth.js';
+
 // Validation utilities
 export type { ValidationResult } from './utils/validation.js';
 export {
