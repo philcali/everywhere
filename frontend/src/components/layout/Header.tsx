@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AuthButton } from '../auth';
 
 interface HeaderProps {
   onMenuToggle?: () => void;
@@ -40,12 +41,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
 
           {/* Desktop Auth Buttons */}
           <div className="hidden md:flex items-center space-x-4">
-            <button className="btn-secondary">
-              Sign In
-            </button>
-            <button className="btn-primary">
-              Sign Up
-            </button>
+            <AuthButton />
           </div>
 
           {/* Mobile menu button */}
@@ -119,12 +115,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
             </a>
             <div className="pt-4 pb-3 border-t border-gray-200">
               <div className="flex flex-col space-y-3">
-                <button className="btn-secondary w-full touch-manipulation">
-                  Sign In
-                </button>
-                <button className="btn-primary w-full touch-manipulation">
-                  Sign Up
-                </button>
+                <AuthButton />
               </div>
             </div>
           </div>

@@ -4,11 +4,20 @@ import Header from '../components/layout/Header';
 import Layout from '../components/layout/Layout';
 import Container from '../components/layout/Container';
 import Grid from '../components/layout/Grid';
+import { AuthProvider } from '..//components/auth';
+
+const MockAuthProvider = ({ children }: { children: React.ReactNode }) => (
+  <AuthProvider>{children}</AuthProvider>
+);
 
 describe('Layout Components', () => {
   describe('Header', () => {
     it('renders the header with navigation', () => {
-      render(<Header />);
+      render(
+        <MockAuthProvider>
+          <Header />
+        </MockAuthProvider>
+      );
       
       expect(screen.getByRole('heading', { name: /travel weather plotter/i })).toBeInTheDocument();
       expect(screen.getAllByRole('link', { name: /route planner/i })).toHaveLength(2); // Desktop and mobile
@@ -17,7 +26,11 @@ describe('Layout Components', () => {
     });
 
     it('toggles mobile menu when hamburger button is clicked', () => {
-      render(<Header />);
+      render(
+        <MockAuthProvider>
+          <Header />
+        </MockAuthProvider>
+      );
       
       const menuButton = screen.getByRole('button', { name: /open main menu/i });
       expect(menuButton).toBeInTheDocument();
@@ -43,7 +56,11 @@ describe('Layout Components', () => {
     });
 
     it('has proper mobile-first responsive classes', () => {
-      render(<Header />);
+      render(
+        <MockAuthProvider>
+          <Header />
+        </MockAuthProvider>
+      );
       
       // Desktop navigation should be hidden on mobile
       const desktopNav = screen.getByRole('navigation');
@@ -55,7 +72,11 @@ describe('Layout Components', () => {
     });
 
     it('has proper touch targets for mobile', () => {
-      render(<Header />);
+      render(
+        <MockAuthProvider>
+          <Header />
+        </MockAuthProvider>
+      );
       
       const mobileButton = screen.getByRole('button', { name: /open main menu/i });
       expect(mobileButton).toHaveClass('min-h-44', 'touch-manipulation');
@@ -65,9 +86,11 @@ describe('Layout Components', () => {
   describe('Layout', () => {
     it('renders the complete layout structure', () => {
       render(
-        <Layout>
-          <div data-testid="main-content">Test content</div>
-        </Layout>
+        <MockAuthProvider>
+          <Layout>
+            <div data-testid="main-content">Test content</div>
+          </Layout>
+        </MockAuthProvider>
       );
       
       expect(screen.getByRole('banner')).toBeInTheDocument(); // header
@@ -78,9 +101,11 @@ describe('Layout Components', () => {
 
     it('has proper responsive layout classes', () => {
       render(
-        <Layout>
-          <div>Content</div>
-        </Layout>
+        <MockAuthProvider>
+          <Layout>
+            <div>Content</div>
+          </Layout>
+        </MockAuthProvider>
       );
       
       const layoutWrapper = screen.getByRole('main').parentElement;
