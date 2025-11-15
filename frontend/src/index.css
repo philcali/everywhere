@@ -391,3 +391,70 @@ body {
 
 /* Letter spacing */
 .tracking-wider { letter-spacing: 0.05em; }
+
+/* Mobile-first responsive enhancements */
+.min-h-44 { min-height: 44px; } /* Minimum touch target size for mobile */
+.touch-manipulation { touch-action: manipulation; } /* Optimize touch interactions */
+
+/* Additional mobile-specific utilities */
+@media (max-width: 639px) {
+  .mobile\\:text-center { text-align: center; }
+  .mobile\\:px-4 { padding-left: var(--spacing-4); padding-right: var(--spacing-4); }
+  .mobile\\:py-2 { padding-top: var(--spacing-2); padding-bottom: var(--spacing-2); }
+}
+
+/* Enhanced responsive grid */
+@media (min-width: 1280px) {
+  .xl\\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .xl\\:grid-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+
+/* Responsive spacing */
+@media (min-width: 640px) {
+  .sm\\:space-x-6 > * + * { margin-left: var(--spacing-6); }
+  .sm\\:space-y-0 > * + * { margin-top: 0; }
+}
+
+/* Enhanced button styles for mobile */
+.btn-primary,
+.btn-secondary {
+  min-height: 44px; /* Ensure minimum touch target */
+  touch-action: manipulation;
+}
+
+/* Mobile-optimized form elements */
+.form-input {
+  min-height: 44px;
+  padding: var(--spacing-3) var(--spacing-4);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-base);
+  transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Responsive text sizes */
+@media (max-width: 639px) {
+  .mobile\\:text-sm { font-size: var(--font-size-sm); }
+  .mobile\\:text-base { font-size: var(--font-size-base); }
+}
+
+/* Enhanced accessibility */
+.focus-visible\\:ring-2:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-primary-500);
+}
+
+/* Smooth scrolling for better mobile experience */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Prevent horizontal scroll on mobile */
+body {
+  overflow-x: hidden;
+}
