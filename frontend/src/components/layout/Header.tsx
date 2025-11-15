@@ -52,10 +52,11 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
           <div className="md:hidden">
             <button
               onClick={toggleMobileMenu}
-              className="inline-flex items-center justify-center p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2"
-              aria-expanded="false"
+              className="inline-flex items-center justify-center p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 min-h-44 touch-manipulation"
+              aria-expanded={isMobileMenuOpen}
+              aria-label={isMobileMenuOpen ? 'Close main menu' : 'Open main menu'}
             >
-              <span className="sr-only">Open main menu</span>
+              <span className="sr-only">{isMobileMenuOpen ? 'Close main menu' : 'Open main menu'}</span>
               {/* Hamburger icon */}
               <svg
                 className={`${isMobileMenuOpen ? 'hidden' : 'block'} h-6 w-6`}
@@ -97,28 +98,31 @@ const Header: React.FC<HeaderProps> = ({ onMenuToggle }) => {
           <div className="px-2 pt-4 pb-3 space-y-1 sm:px-3 border-t border-gray-200">
             <a
               href="#planner"
-              className="nav-link nav-link-active block"
+              className="nav-link nav-link-active block min-h-44 touch-manipulation"
+              onClick={() => setIsMobileMenuOpen(false)}
             >
               Route Planner
             </a>
             <a
               href="#journal"
-              className="nav-link nav-link-inactive block"
+              className="nav-link nav-link-inactive block min-h-44 touch-manipulation"
+              onClick={() => setIsMobileMenuOpen(false)}
             >
               Travel Journal
             </a>
             <a
               href="#about"
-              className="nav-link nav-link-inactive block"
+              className="nav-link nav-link-inactive block min-h-44 touch-manipulation"
+              onClick={() => setIsMobileMenuOpen(false)}
             >
               About
             </a>
             <div className="pt-4 pb-3 border-t border-gray-200">
-              <div className="flex flex-col space-y-2">
-                <button className="btn-secondary w-full">
+              <div className="flex flex-col space-y-3">
+                <button className="btn-secondary w-full touch-manipulation">
                   Sign In
                 </button>
-                <button className="btn-primary w-full">
+                <button className="btn-primary w-full touch-manipulation">
                   Sign Up
                 </button>
               </div>

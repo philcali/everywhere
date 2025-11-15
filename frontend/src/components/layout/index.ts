@@ -3,3 +3,11 @@ export { default as Header } from './Header';
 export { default as Footer } from './Footer';
 export { default as Container } from './Container';
 export { default as Grid } from './Grid';
+export { 
+  ResponsiveWrapper, 
+  MobileOnly, 
+  DesktopOnly, 
+  TabletUp, 
+  ResponsiveText, 
+  ResponsiveSpacing 
+} from './Responsive';
