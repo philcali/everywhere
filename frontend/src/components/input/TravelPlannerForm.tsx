@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Location } from '../../../../shared/src/types/location';
-import { TravelMode, TravelConfig } from '../../../../shared/src/types/travel';
+import { TravelMode } from '../../../../shared/src/types/travel';
 import LocationInput from './LocationInput';
 import TravelModeSelector from './TravelModeSelector';
 import DurationSpeedInput from './DurationSpeedInput';

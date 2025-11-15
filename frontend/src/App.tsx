@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Layout, Container, Grid } from './components/layout';
 import { TravelPlannerForm } from './components/input';
 
