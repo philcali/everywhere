@@ -115,7 +115,7 @@
   - Implement responsive navigation and layout components
   - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
-- [ ] 7.2 Create user input components
+- [x] 7.2 Create user input components
   - Build location input component with autocomplete functionality
   - Create travel mode selector component supporting all modes (land, air, sea)
   - Implement duration and speed input components with validation

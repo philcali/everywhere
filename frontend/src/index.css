@@ -458,3 +458,199 @@ html {
 body {
   overflow-x: hidden;
 }
+/
+* Form Input Enhancements */
+.form-input {
+  background-color: var(--color-white);
+  color: var(--color-gray-900);
+  line-height: 1.5;
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--color-gray-300);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-3) var(--spacing-4);
+  font-size: var(--font-size-base);
+  transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+  min-height: 44px; /* Ensure minimum touch target */
+  touch-action: manipulation;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-input:disabled {
+  background-color: var(--color-gray-100);
+  color: var(--color-gray-500);
+  cursor: not-allowed;
+}
+
+.form-input::placeholder {
+  color: var(--color-gray-400);
+}
+
+/* Input with icon spacing */
+.form-input.pl-10 {
+  padding-left: 2.5rem;
+}
+
+.form-input.pr-10 {
+  padding-right: 2.5rem;
+}
+
+.form-input.pr-16 {
+  padding-right: 4rem;
+}
+
+/* Animation for loading spinner */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Enhanced button states */
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary:disabled:hover,
+.btn-secondary:disabled:hover {
+  background-color: var(--color-primary-600);
+  transform: none;
+}
+
+/* Responsive form improvements */
+@media (max-width: 639px) {
+  .form-input {
+    font-size: 16px; /* Prevent zoom on iOS */
+  }
+}
+
+/* Focus visible for better accessibility */
+.focus-visible\:ring-2:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-primary-500);
+}
+
+/* Enhanced radio button styling */
+input[type="radio"]:focus-visible + label {
+  box-shadow: 0 0 0 2px var(--color-primary-500);
+}
+
+/* Improved checkbox and radio accessibility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Enhanced dropdown styling */
+.dropdown-menu {
+  background-color: var(--color-white);
+  border: 1px solid var(--color-gray-300);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  max-height: 15rem;
+  overflow-y: auto;
+  z-index: 50;
+}
+
+.dropdown-item {
+  padding: var(--spacing-3) var(--spacing-4);
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-gray-100);
+  transition: background-color 0.2s ease-in-out;
+}
+
+.dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.dropdown-item:hover {
+  background-color: var(--color-gray-50);
+}
+
+.dropdown-item.selected {
+  background-color: var(--color-primary-50);
+  color: var(--color-primary-700);
+}
+
+/* Form validation styling */
+.form-error {
+  border-color: #ef4444;
+}
+
+.form-error:focus {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.form-success {
+  border-color: #10b981;
+}
+
+.form-success:focus {
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+/* Enhanced mobile touch targets */
+@media (max-width: 768px) {
+  .btn-primary,
+  .btn-secondary,
+  .form-input {
+    min-height: 48px; /* Larger touch targets on mobile */
+  }
+  
+  .dropdown-item {
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+  }
+}
+
+/* Smooth transitions for better UX */
+.transition-all {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Enhanced focus states for keyboard navigation */
+.focus\:ring-primary:focus {
+  box-shadow: 0 0 0 2px var(--color-primary-500);
+}
+
+/* Loading state styling */
+.loading-overlay {
+  position: relative;
+}
+
+.loading-overlay::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
