@@ -2,8 +2,7 @@
 
 <div align="center">
 
-[![CI/CD Pipeline](https://github.com/philcali/travel-weather-plotter/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/philcali/travel-weather-plotter/actions)
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/philcali/travel-weather-plotter/actions)
+[![CI/CD Pipeline](https://github.com/philcali/everywhere/actions/workflows/ci.yml/badge.svg)](https://github.com/philcali/everywhere/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -93,8 +92,8 @@ graph TB
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/philcali/travel-weather-plotter.git
-   cd travel-weather-plotter
+   git clone https://github.com/philcali/everywhere.git
+   cd everywhere
    ```
 
 2. **Install dependencies**
@@ -160,8 +159,8 @@ npm run docker:start:dev
 
 ```bash
 # Build and run production
-docker build -t travel-weather-plotter .
-docker run -p 3001:3001 -e WEATHER_API_KEY=your_key travel-weather-plotter
+docker build -t everywhere .
+docker run -p 3001:3001 -e WEATHER_API_KEY=your_key everywhere
 
 # Or use Docker Compose
 docker-compose up -d
@@ -182,7 +181,7 @@ docker-compose up -d
 ## 📁 Project Structure
 
 ```
-travel-weather-plotter/
+everywhere/
 ├── 📁 frontend/                 # React frontend application
 │   ├── 📁 src/
 │   │   ├── 📁 components/       # Reusable UI components
@@ -386,8 +385,8 @@ npm run docker:start:dev
 **Manual Docker Commands:**
 ```bash
 # Build and run production
-docker build -t travel-weather-plotter .
-docker run -p 3001:3001 -e WEATHER_API_KEY=your_key travel-weather-plotter
+docker build -t everywhere .
+docker run -p 3001:3001 -e WEATHER_API_KEY=your_key everywhere
 
 # Or use Docker Compose
 docker-compose up -d
@@ -472,9 +471,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Support
 
 - 📧 **Email**: support@travelweatherplotter.com
-- 🐛 **Issues**: [GitHub Issues](https://github.com/philcali/travel-weather-plotter/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/philcali/travel-weather-plotter/discussions)
-- 📖 **Documentation**: [Wiki](https://github.com/philcali/travel-weather-plotter/wiki)
+- 🐛 **Issues**: [GitHub Issues](https://github.com/philcali/everywhere/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/philcali/everywhere/discussions)
+- 📖 **Documentation**: [Wiki](https://github.com/philcali/everywhere/wiki)
 
 ---
 
@@ -482,6 +481,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Made with ❤️ by the Travel Weather Plotter Team**
 
-[⭐ Star this repo](https://github.com/philcali/travel-weather-plotter) • [🐛 Report Bug](https://github.com/philcali/travel-weather-plotter/issues) • [✨ Request Feature](https://github.com/philcali/travel-weather-plotter/issues)
+[⭐ Star this repo](https://github.com/philcali/everywhere) • [🐛 Report Bug](https://github.com/philcali/everywhere/issues) • [✨ Request Feature](https://github.com/philcali/everywhere/issues)
 
 </div>

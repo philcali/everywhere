@@ -28,8 +28,8 @@ This document provides comprehensive instructions for running Travel Weather Plo
 ### 1. Clone and Setup
 
 ```bash
-git clone https://github.com/philcali/travel-weather-plotter.git
-cd travel-weather-plotter
+git clone https://github.com/philcali/everywhere.git
+cd everywhere
 
 # Copy environment file
 cp .env.example .env
@@ -433,20 +433,20 @@ All services include health checks:
 docker-compose ps
 
 # View health check logs
-docker inspect --format='{{json .State.Health}}' travel-weather-plotter
+docker inspect --format='{{json .State.Health}}' everywhere
 ```
 
 ### Debug Mode
 
 ```bash
 # Start with debug logging
-DEBUG=travel-weather-plotter:* ./docker-scripts/start.sh --dev
+DEBUG=everywhere:* ./docker-scripts/start.sh --dev
 
 # Access container shell
-docker exec -it travel-weather-plotter sh
+docker exec -it everywhere sh
 
 # View container processes
-docker exec travel-weather-plotter ps aux
+docker exec everywhere ps aux
 ```
 
 ## ⚙️ Advanced Configuration
