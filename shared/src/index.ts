@@ -31,6 +31,16 @@ export type {
   AuthState 
 } from './types/auth.js';
 
+// Journey types
+export type {
+  SavedJourney,
+  JourneyQuery,
+  JourneyListResponse,
+  SaveJourneyRequest,
+  JourneyComparison,
+  JourneyExportData
+} from './types/journey.js';
+
 // Validation utilities
 export type { ValidationResult } from './utils/validation.js';
 export {
