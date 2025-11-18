@@ -1,20 +1,23 @@
 import React, { useState } from 'react';
-import { WeatherForecast, WeatherCondition, PrecipitationType } from '../../types/shared';
+import { WeatherForecast, WeatherCondition, PrecipitationType, Route } from '../../types/shared';
 import { WeatherTimelineChart } from './WeatherTimelineChart';
 import { TemperatureTrendChart } from './TemperatureTrendChart';
 import { PrecipitationChart } from './PrecipitationChart';
 import { WeatherIconDisplay } from './WeatherIconDisplay';
+import { RouteMapWithWeather } from './RouteMapWithWeather';
 
 interface WeatherVisualizationProps {
   weatherData: WeatherForecast[];
+  route?: Route;
   className?: string;
   onForecastSelect?: (forecast: WeatherForecast) => void;
 }
 
-type ChartView = 'timeline' | 'temperature' | 'precipitation' | 'overview';
+type ChartView = 'timeline' | 'temperature' | 'precipitation' | 'overview' | 'map';
 
 export const WeatherVisualization: React.FC<WeatherVisualizationProps> = ({
   weatherData,
+  route,
   className = '',
   onForecastSelect
 }) => {
@@ -104,6 +107,23 @@ export const WeatherVisualization: React.FC<WeatherVisualizationProps> = ({
             />
           </div>
         );
+      case 'map':
+        return route ? (
+          <RouteMapWithWeather
+            route={route}
+            weatherData={weatherData}
+            onWeatherPointSelect={handleForecastSelect}
+            height={500}
+          />
+        ) : (
+          <div className="flex items-center justify-center h-64 bg-gray-100 rounded-lg">
+            <div className="text-center text-gray-500">
+              <div className="text-4xl mb-2">🗺️</div>
+              <h3 className="text-lg font-medium mb-1">Route Required</h3>
+              <p className="text-sm">Route data is required to display the map view.</p>
+            </div>
+          </div>
+        );
       default:
         return null;
     }
@@ -152,6 +172,7 @@ export const WeatherVisualization: React.FC<WeatherVisualizationProps> = ({
             { key: 'timeline', label: 'Interactive Timeline', icon: '📊' },
             { key: 'temperature', label: 'Temperature Trend', icon: '🌡️' },
             { key: 'precipitation', label: 'Precipitation', icon: '🌧️' },
+            { key: 'map', label: 'Route Map', icon: '🗺️' },
             { key: 'overview', label: 'Overview', icon: '📈' }
           ].map(({ key, label, icon }) => (
             <button
