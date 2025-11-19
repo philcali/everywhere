@@ -1,9 +1,55 @@
 import React from 'react';
 import { WeatherVisualization } from './WeatherVisualization';
-import { WeatherForecast, WeatherCondition, PrecipitationType } from '../../types/shared';
+import { WeatherForecast, WeatherCondition, PrecipitationType, Route, TravelMode } from '../../types/shared';
 
 // Demo component to showcase the weather visualization functionality
 export const WeatherVisualizationDemo: React.FC = () => {
+  // Sample route data for demonstration
+  const sampleRoute: Route = {
+    id: 'demo-route-ny-to-richmond',
+    source: {
+      name: 'New York, NY',
+      coordinates: { latitude: 40.7128, longitude: -74.0060 },
+      address: 'New York, NY, USA'
+    },
+    destination: {
+      name: 'Richmond, VA',
+      coordinates: { latitude: 37.5407, longitude: -77.4360 },
+      address: 'Richmond, VA, USA'
+    },
+    travelMode: TravelMode.DRIVING,
+    waypoints: [
+      {
+        coordinates: { latitude: 40.7128, longitude: -74.0060 },
+        distanceFromStart: 0,
+        estimatedTimeFromStart: 0
+      },
+      {
+        coordinates: { latitude: 39.9526, longitude: -75.1652 },
+        distanceFromStart: 150,
+        estimatedTimeFromStart: 240
+      },
+      {
+        coordinates: { latitude: 39.2904, longitude: -76.6122 },
+        distanceFromStart: 280,
+        estimatedTimeFromStart: 480
+      },
+      {
+        coordinates: { latitude: 38.9072, longitude: -77.0369 },
+        distanceFromStart: 350,
+        estimatedTimeFromStart: 720
+      },
+      {
+        coordinates: { latitude: 37.5407, longitude: -77.4360 },
+        distanceFromStart: 450,
+        estimatedTimeFromStart: 960
+      }
+    ],
+    totalDistance: 450,
+    estimatedDuration: 960,
+    segments: []
+  };
+
   // Sample weather data for demonstration
   const sampleWeatherData: WeatherForecast[] = [
     {
@@ -175,6 +221,7 @@ export const WeatherVisualizationDemo: React.FC = () => {
 
       <WeatherVisualization
         weatherData={sampleWeatherData}
+        route={sampleRoute}
         onForecastSelect={handleForecastSelect}
         className="bg-gray-50 rounded-xl p-6"
       />
@@ -185,6 +232,8 @@ export const WeatherVisualizationDemo: React.FC = () => {
           <li>• Interactive timeline chart with multiple weather metrics</li>
           <li>• Temperature trend visualization with min/max ranges</li>
           <li>• Precipitation probability and intensity charts</li>
+          <li>• Interactive route map with weather overlay markers</li>
+          <li>• Color-coded weather conditions and intensity indicators</li>
           <li>• Weather condition icons and visual indicators</li>
           <li>• Responsive design for mobile and desktop</li>
           <li>• Detailed forecast information on selection</li>
